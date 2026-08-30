@@ -1,1 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Pocket Budget & Paycheck Forecast</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    body { -webkit-tap-highlight-color: transparent; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans pb-24 antialiased min-h-screen select-none">
 
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex justify-between items-center">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-black">
+        <i class="fa-solid fa-chart-line text-sm"></i>
+      </div>
+      <div>
+        <h1 class="text-sm font-bold tracking-tight">PocketBudget</h1>
+        <p class="text-[10px] text-slate-400 font-medium" id="cycle-dates-label">25 Aug – 24 Sep</p>
+      </div>
+    </div>
+    <select id="cycleSelector" onchange="switchCycle()" class="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"></select>
+  </header>
+
+  <!-- Main View -->
+  <main class="max-w-md mx-auto p-4 space-y-4">
+
+    <!-- TAB 1: DASHBOARD & FORECAST -->
+    <section id="tab-dashboard" class="space-y-4">
+      <div class="bg-gradient-to-br from-slate-900 to-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Paycheck Forecast</span>
+          <span id="days-to-payday" class="text-xs font-semibold bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded-full">25 days to payday</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-1">
+          <div>
+            <p class="text-[11px] text-slate-400">Total Income</p>
+            <p id="dash-total-income" class="text-lg font-bold text-emerald-400">R 0.00</p>
+          </div>
+          <div>
+            <p class="text-[11px] text-slate-400">Total Spent So Far</p>
+            <p id="dash-total-spent" class="text-lg font-bold text-rose-400">R 0.00</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex justify-between items-center">
+          <div>
+            <p class="text-[11px] font-medium text-slate-400">Safe Weekly Discretionary</p>
+            <p class="text-[10px] text-slate-500">Food, fuel, dining & ad-hoc</p>
+          </div>
+          <div class="text-right">
+            <p id="dash-weekly-runway" class="text-base font-bold text-slate-100">R 0 / wk</p>
+            <p id="dash-weekly-status" class="text-[10px] text-emerald-400 font-medium">On Track</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Weekly Pacing Breakdown -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Weekly Spend Pacing</h2>
+        <div id="weeklyPacingList" class="space-y-2.5"></div>
+      </div>
+
+      <!-- Spend by Group -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Spend by Group</h2>
+        <div class="h-44 relative flex items-center justify-center">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Grouped Category Breakdown -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+        <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Budget vs Actual</h2>
+        <div id="categoryBreakdownList" class="space-y-4"></div>
+      </div>
+    </section>
+
+    <!-- TAB 2: TRANSACTIONS ACTIVITY -->
+    <section id="tab-transactions" class="space-y-4 hidden">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Cycle Activity</h2>
+          <p class="text-[10px] text-slate-500">Tap any item to change its category</p>
+        </div>
+        <span id="tx-count" class="text-xs text-slate-500">0 records</span>
+      </div>
+
+      <input type="text" id="txSearch" oninput="renderTransactions()" placeholder="Search payee, keyword, category..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+
+      <div id="transactionsList" class="space-y-2.5"></div>
+    </section>
+
+    <!-- TAB 3: IMPORT & RULES -->
+    <section id="tab-import" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
+        <div class="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-lg">
+          <i class="fa-solid fa-file-csv"></i>
+        </div>
+        <div>
+          <p class="text-sm font-semibold">Upload Bank CSV</p>
+          <p class="text-xs text-slate-400 mt-0.5">Compatible with headerless Standard Bank / FNB exports.</p>
+        </div>
+        <label class="block">
+          <span class="inline-block bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition">Select CSV File</span>
+          <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVUpload(event)" />
+        </label>
+      </div>
+
+      <!-- Keyword Rule Editor -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Categorization Rules</h2>
+          <button onclick="addNewRuleModal()" class="text-xs text-emerald-400 font-semibold">+ Add Rule</button>
+        </div>
+        <div id="rulesList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Backup & Reset</p>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button onclick="exportData()" class="bg-slate-800 text-xs py-2 rounded-xl text-slate-200 font-medium">Export Backup</button>
+          <button onclick="clearAllData()" class="bg-rose-950/40 text-rose-400 border border-rose-900/30 text-xs py-2 rounded-xl font-medium">Clear All Data</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: BUDGET TARGET SETUP -->
+    <section id="tab-budget" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Monthly Commitments</h2>
+          <span class="text-xs text-slate-400" id="budgetTargetCycleLabel"></span>
+        </div>
+        <div id="budgetInputsList" class="space-y-4"></div>
+        <button onclick="saveBudgets()" class="w-full bg-emerald-500 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition">Save Budget Targets</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Edit Category Modal (Bottom Sheet) -->
+  <div id="editCategoryModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end justify-center hidden">
+    <div class="bg-slate-900 border-t border-slate-800 w-full max-w-md rounded-t-3xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+      <div class="flex justify-between items-center">
+        <h3 class="text-sm font-bold text-slate-100">Update Category</h3>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-200 p-1">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+        <p id="modalTxDesc" class="text-xs font-semibold text-slate-200 truncate"></p>
+        <p id="modalTxMeta" class="text-[10px] text-slate-400"></p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-xs text-slate-400 font-medium">Select New Category</label>
+        <select id="modalCategorySelect" class="w-full bg-slate-800 border border-slate-700 text-xs rounded-xl p-2.5 text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"></select>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-1">
+        <input type="checkbox" id="modalSaveRuleCheckbox" checked class="w-4 h-4 rounded bg-slate-800 border-slate-700 text-emerald-500 focus:ring-0" />
+        <label for="modalSaveRuleCheckbox" class="text-xs text-slate-300">Always categorize matching transactions like this</label>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <button onclick="closeEditModal()" class="w-full bg-slate-800 text-slate-300 text-xs font-bold py-2.5 rounded-xl">Cancel</button>
+        <button onclick="applyCategoryEdit()" class="w-full bg-emerald-500 text-slate-950 text-xs font-bold py-2.5 rounded-xl">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Bar -->
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-6 py-2 flex justify-around">
+    <button onclick="setTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-emerald-400 transition">
+      <i class="fa-solid fa-chart-pie text-base"></i>
+      <span class="text-[10px] mt-1 font-semibold">Forecast</span>
+    </button>
+    <button onclick="setTab('transactions')" id="nav-transactions" class="flex flex-col items-center text-slate-400 transition">
+      <i class="fa-solid fa-list text-base"></i>
+      <span class="text-[10px] mt-1 font-semibold">Activity</span>
+    </button>
+    <button onclick="setTab('budget')" id="nav-budget" class="flex flex-col items-center text-slate-400 transition">
+      <i class="fa-solid fa-sliders text-base"></i>
+      <span class="text-[10px] mt-1 font-semibold">Targets</span>
+    </button>
+    <button onclick="setTab('import')" id="nav-import" class="flex flex-col items-center text-slate-400 transition">
+      <i class="fa-solid fa-gear text-base"></i>
+      <span class="text-[10px] mt-1 font-semibold">Import</span>
+    </button>
+  </nav>
+
+  <script>
+    const BUDGET_GROUPS = {
+      'Fixed Obligations': [
+        'Bond (Primary Residence)', 'Damhuis Levy', 'Apartment Bond', 'Apartment Levy',
+        'Apartment Rates & Taxes', 'Retirement Annuity (10X)', 'Short-Term Insurance',
+        'Life & Dread Disease Cover', 'Disability Cover', 'Household Support (Hendrik)',
+        'Fibre Internet (Cool Ideas)', 'Mobile (Vodacom)', 'Banking Fees', 'Digital Subscriptions'
+      ],
+      'Variable Necessities': [
+        'Electricity & Water (CoJ)', 'Groceries & Household Supplies', 'Fuel & Transport',
+        'Pharmacy & Health Support', 'Pet Care'
+      ],
+      'Controlled Discretionary': [
+        'Dining Out & Takeaways', 'Social/Pubs & Braai', 'General Retail & Ad-Hoc Misc'
+      ],
+      'Income': ['Income']
+    };
+
+    const DEFAULT_BUDGET_TARGETS = {
+      'Bond (Primary Residence)': 29224,
+      'Damhuis Levy': 4500,
+      'Apartment Bond': 1600,
+      'Apartment Levy': 1800,
+      'Apartment Rates & Taxes': 1500,
+      'Retirement Annuity (10X)': 3500,
+      'Short-Term Insurance': 1588,
+      'Life & Dread Disease Cover': 943,
+      'Disability Cover': 1664,
+      'Household Support (Hendrik)': 2000,
+      'Fibre Internet (Cool Ideas)': 695,
+      'Mobile (Vodacom)': 780,
+      'Banking Fees': 470,
+      'Digital Subscriptions': 1304,
+      'Electricity & Water (CoJ)': 8000,
+      'Groceries & Household Supplies': 10000,
+      'Fuel & Transport': 3000,
+      'Pharmacy & Health Support': 800,
+      'Pet Care': 500,
+      'Dining Out & Takeaways': 2000,
+      'Social/Pubs & Braai': 1200,
+      'General Retail & Ad-Hoc Misc': 1500
+    };
+
+    const DEFAULT_RULES = [
+      { pattern: 'salary', category: 'Income' },
+      { pattern: 'unit 200', category: 'Apartment Levy' },
+      { pattern: 'hendrik', category: 'Household Support (Hendrik)' },
+      { pattern: 'brightrock', category: 'Life & Dread Disease Cover' },
+      { pattern: 'old mutual', category: 'Disability Cover' },
+      { pattern: 'maintenance fee', category: 'Banking Fees' },
+      { pattern: 'service fee', category: 'Banking Fees' },
+      { pattern: '10x', category: 'Retirement Annuity (10X)' },
+      { pattern: 'cool ideas', category: 'Fibre Internet (Cool Ideas)' },
+      { pattern: 'vodacom', category: 'Mobile (Vodacom)' },
+      { pattern: 'city of joburg', category: 'Electricity & Water (CoJ)' },
+      { pattern: 'woolworths', category: 'Groceries & Household Supplies' },
+      { pattern: 'checkers', category: 'Groceries & Household Supplies' },
+      { pattern: 'pick n pay', category: 'Groceries & Household Supplies' },
+      { pattern: 'spar', category: 'Groceries & Household Supplies' },
+      { pattern: 'engen', category: 'Fuel & Transport' },
+      { pattern: 'shell', category: 'Fuel & Transport' },
+      { pattern: 'sasol', category: 'Fuel & Transport' },
+      { pattern: 'uber', category: 'Fuel & Transport' },
+      { pattern: 'takealot', category: 'General Retail & Ad-Hoc Misc' },
+      { pattern: 'dis-chem', category: 'Pharmacy & Health Support' },
+      { pattern: 'clicks', category: 'Pharmacy & Health Support' },
+      { pattern: 'netflix', category: 'Digital Subscriptions' },
+      { pattern: 'spotify', category: 'Digital Subscriptions' },
+      { pattern: 'showmax', category: 'Digital Subscriptions' },
+      { pattern: 'apple', category: 'Digital Subscriptions' }
+    ];
+
+    let state = {
+      transactions: JSON.parse(localStorage.getItem('pb_transactions') || '[]'),
+      budgets: JSON.parse(localStorage.getItem('pb_budgets') || '{}'),
+      rules: JSON.parse(localStorage.getItem('pb_rules') || JSON.stringify(DEFAULT_RULES)),
+      selectedCycle: '2026-08'
+    };
+
+    let chartInstance = null;
+    let activeEditingTxId = null;
+
+    function getCycleKeyForDate(dateStr) {
+      const parts = dateStr.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+
+      if (d >= 25) {
+        return `${y}-${String(m).padStart(2, '0')}`;
+      } else {
+        const prevDate = new Date(y, m - 2, 1);
+        return `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+      }
+    }
+
+    function getCycleDateRange(cycleKey) {
+      const [y, m] = cycleKey.split('-').map(Number);
+      const start = new Date(y, m - 1, 25);
+      const nextMonth = new Date(y, m, 24);
+      return { start, end: nextMonth };
+    }
+
+    function parseBankDate(rawDate) {
+      if (!rawDate) return new Date().toISOString().split('T')[0];
+      const match = String(rawDate).trim().match(/^(\d{1,2})([A-Za-z]{3})(\d{4})$/);
+      if (match) {
+        const months = { jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06', jul:'07', aug:'08', sep:'09', oct:'10', nov:'11', dec:'12' };
+        const day = match[1].padStart(2, '0');
+        const month = months[match[2].toLowerCase()] || '01';
+        const year = match[3];
+        return `${year}-${month}-${day}`;
+      }
+      const d = new Date(rawDate);
+      return !isNaN(d) ? d.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    }
+
+    function init() {
+      populateCycleSelector();
+      if (!state.budgets[state.selectedCycle]) {
+        state.budgets[state.selectedCycle] = { ...DEFAULT_BUDGET_TARGETS };
+        saveState();
+      }
+      populateCategorySelectDropdown();
+      renderDashboard();
+      renderBudgetsInput();
+      renderRules();
+    }
+
+    function saveState() {
+      localStorage.setItem('pb_transactions', JSON.stringify(state.transactions));
+      localStorage.setItem('pb_budgets', JSON.stringify(state.budgets));
+      localStorage.setItem('pb_rules', JSON.stringify(state.rules));
+    }
+
+    function setTab(tabName) {
+      ['dashboard', 'transactions', 'import', 'budget'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tabName);
+        const navBtn = document.getElementById(`nav-${t}`);
+        if (t === tabName) {
+          navBtn.classList.remove('text-slate-400');
+          navBtn.classList.add('text-emerald-400');
+        } else {
+          navBtn.classList.add('text-slate-400');
+          navBtn.classList.remove('text-emerald-400');
+        }
+      });
+      if (tabName === 'dashboard') renderDashboard();
+      if (tabName === 'transactions') renderTransactions();
+      if (tabName === 'budget') renderBudgetsInput();
+    }
+
+    function populateCycleSelector() {
+      const cycles = new Set(['2026-08', '2026-09', '2026-10']);
+      state.transactions.forEach(t => {
+        if (t.date) cycles.add(getCycleKeyForDate(t.date));
+      });
+
+      const selector = document.getElementById('cycleSelector');
+      selector.innerHTML = '';
+      Array.from(cycles).sort().reverse().forEach(c => {
+        const [y, m] = c.split('-').map(Number);
+        const startMonthName = new Date(y, m - 1, 25).toLocaleString('en', { month: 'short' });
+        const endMonthName = new Date(y, m, 24).toLocaleString('en', { month: 'short' });
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = `${startMonthName} 25 – ${endMonthName} 24`;
+        selector.appendChild(opt);
+      });
+
+      if (!selector.value) selector.value = '2026-08';
+      state.selectedCycle = selector.value;
+      updateCycleLabel();
+    }
+
+    function updateCycleLabel() {
+      const [y, m] = state.selectedCycle.split('-').map(Number);
+      const startName = new Date(y, m - 1, 25).toLocaleString('en', { month: 'short' });
+      const endName = new Date(y, m, 24).toLocaleString('en', { month: 'short' });
+      document.getElementById('cycle-dates-label').textContent = `25 ${startName} – 24 ${endName}`;
+    }
+
+    function switchCycle() {
+      state.selectedCycle = document.getElementById('cycleSelector').value;
+      updateCycleLabel();
+      if (!state.budgets[state.selectedCycle]) {
+        state.budgets[state.selectedCycle] = { ...DEFAULT_BUDGET_TARGETS };
+        saveState();
+      }
+      renderDashboard();
+      renderTransactions();
+      renderBudgetsInput();
+    }
+
+    function getCycleTransactions() {
+      return state.transactions.filter(t => t.date && getCycleKeyForDate(t.date) === state.selectedCycle);
+    }
+
+    function categorizeDescription(desc) {
+      const clean = (desc || '').toLowerCase().replace(/[^a-z0-9]/g, ' ');
+      for (const r of state.rules) {
+        if (clean.includes(r.pattern.toLowerCase())) return r.category;
+      }
+      return 'General Retail & Ad-Hoc Misc';
+    }
+
+    function populateCategorySelectDropdown() {
+      const select = document.getElementById('modalCategorySelect');
+      select.innerHTML = '';
+      Object.keys(BUDGET_GROUPS).forEach(grp => {
+        const optGroup = document.createElement('optgroup');
+        optGroup.label = grp;
+        BUDGET_GROUPS[grp].forEach(c => {
+          const opt = document.createElement('option
