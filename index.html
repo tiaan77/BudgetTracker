@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PocketBudget</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #151d2e;
+      --card-inner: #0f1624;
+      --border: #232f48;
+      --accent: #10b981;
+      --accent-dim: rgba(16, 185, 129, 0.15);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --danger: #f43f5e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); padding-bottom: 90px; min-height: 100vh; }
+    
+    header { position: sticky; top: 0; z-index: 40; background: #111827; border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+    .logo-container { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #022c22; font-size: 16px; }
+    .cycle-select { background: #1f293d; color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; outline: none; }
+    
+    .container { max-width: 480px; margin: 0 auto; padding: 14px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+    .card-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .metric-val { font-size: 18px; font-weight: 800; margin-top: 2px; }
+    .metric-sub { font-size: 10px; color: var(--text-muted); }
+    .highlight-box { background: var(--card-inner); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .prog-track { width: 100%; height: 6px; background: #1e293b; border-radius: 99px; overflow: hidden; margin-top: 5px; }
+    .prog-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.3s; }
+    .prog-over { background: var(--danger); }
+    
+    .tx-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .tx-card:active { background: #1e293d; }
+    .badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: #1e293d; color: var(--accent); display: inline-block; }
+    
+    input[type="text"], input[type="number"], select { background: var(--card-inner); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; width: 100%; }
+    .btn { display: block; width: 100%; text-align: center; background: var(--accent); color: #022c22; font-weight: 700; font-size: 13px; padding: 12px; border-radius: 12px; border: none; cursor: pointer; }
+    .btn:active { opacity: 0.85; }
+    .btn-secondary { background: #1e293d; color: var(--text); border: 1px solid var(--border); }
+    .btn-danger { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
+    
+    nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: #111827; border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 8px 0; }
+    .nav-item { background: none; border: none; color: var(--text-muted); font-size: 11px; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; width: 25%; }
+    .nav-item.active { color: var(--accent); }
+    
+    .tab-view { display: none; }
+    .tab-view.active { display: block; }
+    #catModal { display: none; position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.85); align-items: flex-end; justify-content: center; }
+    #catModal.show { display: flex; }
+    .modal-sheet { background: #151d2e; border-top: 1px solid var(--border); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px; max-height: 85vh; overflow-y: auto; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo-container">
+      <div class="logo-icon">R</div>
+      <div>
+        <div style="font-weight: 800; font-size: 14px; letter-spacing: -0.3px;">PocketBudget</div>
+        <div id="hdr-dates" style="font-size: 10px; color: var(--text-muted); font-weight: 500;">25 Aug – 24 Sep</div>
+      </div>
+    </div>
+    <select id="cycleSelector" class="cycle-select" onchange="switchCycle()"></select>
+  </header>
+
+  <!-- Main Container -->
+  <div class="container">
+
+    <!-- TAB 1: FORECAST / DASHBOARD -->
+    <div id="tab-forecast" class="tab-view active">
+      <div class="card">
+        <div class="card-title">
+          <span style="color: var(--accent);">Paycheck Runway</span>
+          <span id="badge-days-left" style="background: var(--accent-dim); color: #6ee7b7; padding: 2px 8px; border-radius: 99px; font-size: 10px;">-- days</span>
+        </div>
+        <div class="grid-2">
+          <div>
+            <div class="metric-sub">Expected Income</div>
+            <div id="dash-inc" class="metric-val" style="color: var(--accent);">R 0.00</div>
+          </div>
+          <div>
+            <div class="metric-sub">Total Spent</div>
+            <div id="dash-spent" class="metric-val" style="color: var(--danger);">R 0.00</div>
+          </div>
+        </div>
+        <div class="highlight-box">
+          <div>
+            <div style="font-size: 11px; font-weight: 700; color: #cbd5e1;">Safe Weekly Discretionary</div>
+            <div style="font-size: 10px; color: var(--text-muted);">Groceries, fuel, dining, misc</div>
+          </div>
+          <div style="text-align: right;">
+            <div id="dash-safe-wk" style="font-size: 15px; font-weight: 800;">R 0 / wk</div>
+            <div id="dash-pace-tag" style="font-size: 10px; color: var(--accent); font-weight: 600;">On Track</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Weekly Pacing -->
+      <div class="card">
+        <div class="card-title"><span>Weekly Pacing</span> <span style="font-weight: 500; text-transform: none; color: var(--text-muted);">Limit: R6,750 / wk</span></div>
+        <div id="pacingList"></div>
+      </div>
+
+      <!-- Grouped Breakdowns -->
+      <div class="card">
+        <div class="card-title">Budget Commitments vs Actual</div>
+        <div id="categoryBreakdownList"></div>
+      </div>
+    </div>
+
+    <!-- TAB 2: ACTIVITY TRANSACTIONS -->
+    <div id="tab-activity" class="tab-view">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div>
+          <div style="font-size: 13px; font-weight: 800;">Cycle Transactions</div>
+          <div style="font-size: 10px; color: var(--text-muted);">Tap any item to change category</div>
+        </div>
+        <span id="badge-tx-count" class="badge">0 records</span>
+      </div>
+      <input type="text" id="txSearch" oninput="renderActivity()" placeholder="Search description, payee, category..." style="margin-bottom: 12px;" />
+      <div id="activityList"></div>
+    </div>
+
+    <!-- TAB 3: MONTHLY TARGETS -->
+    <div id="tab-targets" class="tab-view">
+      <div class="card">
+        <div class="card-title">
+          <span>Target Commitments</span>
+          <span id="targetsCycleLabel" style="color: var(--accent); font-family: monospace;"></span>
+        </div>
+        <div id="targetsInputList"></div>
+        <button class="btn" onclick="saveTargetValues()" style="margin-top: 14px;">Save Targets</button>
+      </div>
+    </div>
+
+    <!-- TAB 4: IMPORT CSV & SETTINGS -->
+    <div id="tab-import" class="tab-view">
+      <div class="card" style="text-align: center; padding: 24px 16px;">
+        <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
+        <div style="font-size: 15px; font-weight: 800; margin-bottom: 4px;">Import Bank CSV</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Supports Current Account & MasterCC formats.</div>
+        <label class="btn" style="cursor: pointer;">
+          Select CSV File
+          <input type="file" id="csvPicker" accept=".csv" style="display: none;" onchange="handleBankCSV(event)" />
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Categorization Rules</span>
+          <button onclick="addRulePrompt()" style="background: none; border: none; color: var(--accent); font-weight: 700; font-size: 11px; cursor: pointer;">+ Add Rule</button>
+        </div>
+        <div id="rulesList" style="max-height: 200px; overflow-y: auto;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Storage & Backups</div>
+        <div class="grid-2">
+          <button class="btn btn-secondary" onclick="exportDataJSON()">Export JSON</button>
+          <button class="btn btn-danger" onclick="clearStorage()">Reset Data</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Category Bottom Sheet Modal -->
+  <div id="catModal" onclick="if(event.target===this)closeCatModal()">
+    <div class="modal-sheet">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="font-size: 14px; font-weight: 800;">Update Category</div>
+        <button onclick="closeCatModal()" style="background:none; border:none; color:var(--text-muted); font-size:18px; cursor:pointer;">✕</button>
+      </div>
+      <div style="background: var(--card-inner); padding: 10px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 14px;">
+        <div id="modalDesc" style="font-size: 12px; font-weight: 700;"></div>
+        <div id="modalMeta" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"></div>
+      </div>
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Assign Category</label>
+        <select id="modalSelect"></select>
+      </div>
+      <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #cbd5e1; margin-bottom: 16px; cursor: pointer;">
+        <input type="checkbox" id="modalRuleCheck" checked style="width: 16px; height: 16px; accent-color: var(--accent);" />
+        Always categorize similar items like this
+      </label>
+      <div class="grid-2">
+        <button class="btn btn-secondary" onclick="closeCatModal()">Cancel</button>
+        <button class="btn" onclick="applyModalEdit()">Save Category</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav>
+    <button class="nav-item active" id="nav-forecast" onclick="setTab('forecast')">
+      <span style="font-size: 16px;">📊</span>
+      <span>Forecast</span>
+    </button>
+    <button class="nav-item" id="nav-activity" onclick="setTab('activity')">
+      <span style="font-size: 16px;">📝</span>
+      <span>Activity</span>
+    </button>
+    <button class="nav-item" id="nav-targets" onclick="setTab('targets')">
+      <span style="font-size: 16px;">🎯</span>
+      <span>Targets</span>
+    </button>
+    <button class="nav-item" id="nav-import" onclick="setTab('import')">
+      <span style="font-size: 16px;">⚙️</span>
+      <span>Import</span>
+    </button>
+  </nav>
+
+  <script>
+    const BUDGET_GROUPS = {
+      'Fixed Obligations': [
+        'Bond (Primary Residence)', 'Damhuis Levy', 'Apartment Bond', 'Apartment Levy',
+        'Apartment Rates & Taxes', 'Retirement Annuity (10X)', 'Short-Term Insurance',
+        'Life & Dread Disease Cover', 'Disability Cover', 'Household Support (Hendrik)',
+        'Fibre Internet (Cool Ideas)', 'Mobile (Vodacom)', 'Banking Fees', 'Digital Subscriptions'
+      ],
+      'Variable Necessities': [
+        'Electricity & Water (CoJ)', 'Groceries & Household Supplies', 'Fuel & Transport',
+        'Pharmacy & Health Support', 'Pet Care'
+      ],
+      'Controlled Discretionary': [
+        'Dining Out & Takeaways', 'Social/Pubs & Braai', 'General Retail & Ad-Hoc Misc'
+      ],
+      'Income': ['Income'],
+      'Internal Transfers': ['CC Payment / Transfer']
+    };
+
+    const DEFAULT_TARGETS = {
+      'Bond (Primary Residence)': 29224,
+      'Damhuis Levy': 4500,
+      'Apartment Bond': 1600,
+      'Apartment Levy': 1800,
+      'Apartment Rates & Taxes': 1500,
+      'Retirement Annuity (10X)': 3500,
+      'Short-Term Insurance': 1588,
+      'Life & Dread Disease Cover': 943,
+      'Disability Cover': 1664,
+      'Household Support (Hendrik)': 2000,
+      'Fibre Internet (Cool Ideas)': 695,
+      'Mobile (Vodacom)': 780,
+      'Banking Fees': 470,
+      'Digital Subscriptions': 1304,
+      'Electricity & Water (CoJ)': 8000,
+      'Groceries & Household Supplies': 10000,
+      'Fuel & Transport': 3000,
+      'Pharmacy & Health Support': 800,
+      'Pet Care': 500,
+      'Dining Out & Takeaways': 2000,
+      'Social/Pubs & Braai': 1200,
+      'General Retail & Ad-Hoc Misc': 1500
+    };
+
+    const DEFAULT_RULES = [
+      { p: 'salary', c: 'Income' },
+      { p: 'the base 200', c: 'Income' },
+      { p: 'mastercc', c: 'CC Payment / Transfer' },
+      { p: 'internet banking transfer', c: 'CC Payment / Transfer' },
+      { p: 'unit 200', c: 'Apartment Levy' },
+      { p: 'hendrik', c: 'Household Support (Hendrik)' },
+      { p: 'brightrock', c: 'Life & Dread Disease Cover' },
+      { p: 'old mutual', c: 'Disability Cover' },
+      { p: 'maintenance fee', c: 'Banking Fees' },
+      { p: 'service fee', c: 'Banking Fees' },
+      { p: '10x', c: 'Retirement Annuity (10X)' },
+      { p: 'cool ideas', c: 'Fibre Internet (Cool Ideas)' },
+      { p: 'vodacom', c: 'Mobile (Vodacom)' },
+      { p: 'city of joburg', c: 'Electricity & Water (CoJ)' },
+      { p: 'woolworths', c: 'Groceries & Household Supplies' },
+      { p: 'checkers', c: 'Groceries & Household Supplies' },
+      { p: 'pick n pay', c: 'Groceries & Household Supplies' },
+      { p: 'spar', c: 'Groceries & Household Supplies' },
+      { p: 'fresh x', c: 'Groceries & Household Supplies' },
+      { p: 'engen', c: 'Fuel & Transport' },
+      { p: 'shell', c: 'Fuel & Transport' },
+      { p: 'sasol', c: 'Fuel & Transport' },
+      { p: 'refuel', c: 'Fuel & Transport' },
+      { p: 'uber', c: 'Fuel & Transport' },
+      { p: 'fournos', c: 'Dining Out & Takeaways' },
+      { p: 'del forno', c: 'Dining Out & Takeaways' },
+      { p: 'carvers', c: 'Dining Out & Takeaways' },
+      { p: 'wake zone', c: 'Social/Pubs & Braai' },
+      { p: 'loco liq', c: 'Social/Pubs & Braai' },
+      { p: 'liquorshop', c: 'Social/Pubs & Braai' },
+      { p: 'hennie s', c: 'Social/Pubs & Braai' },
+      { p: 'dis-chem', c: 'Pharmacy & Health Support' },
+      { p: 'clicks', c: 'Pharmacy & Health Support' },
+      { p: 'netflix', c: 'Digital Subscriptions' },
+      { p: 'youtube', c: 'Digital Subscriptions' },
+      { p: 'spotify', c: 'Digital Subscriptions' },
+      { p: 'showmax', c: 'Digital Subscriptions' },
+      { p: 'apple', c: 'Digital Subscriptions' }
+    ];
+
+    let state = {
+      tx: [],
+      bg: {},
+      rl: [...DEFAULT_RULES],
+      cyc: '2026-08'
+    };
+
+    let activeEditingId = null;
+
+    function getCycleKey(dStr) {
+      if (!dStr) return '2026-08';
+      const parts = dStr.split('-');
+      const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10), day = parseInt(parts[2], 10);
+      if (day >= 25) return `${y}-${String(m).padStart(2, '0')}`;
+      const prev = new Date(y, m - 2, 1);
+      return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function getCycleRange(cycKey) {
+      const [y, m] = (cycKey || '2026-08').split('-').map(Number);
+      return { start: new Date(y, m - 1, 25), end: new Date(y, m, 24) };
+    }
+
+    function parseBankDate(raw) {
+      if (!raw) return new Date().toISOString().split('T')[0];
+      const r = String(raw).trim();
+      
+      // Match DD-MM-YYYY (e.g. 19-08-2026)
+      const dmyMatch = r.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if (dmyMatch) {
+        return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
+      }
+
+      // Match 25Aug2026
+      const charMatch = r.match(/^(\d{1,2})([A-Za-z]{3})(\d{4})$/);
+      if (charMatch) {
+        const mo = { jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06', jul:'07', aug:'08', sep:'09', oct:'10', nov:'11', dec:'12' };
+        return `${charMatch[3]}-${mo[charMatch[2].toLowerCase()] || '01'}-${charMatch[1].padStart(2, '0')}`;
+      }
+
+      const d = new Date(r);
+      return !isNaN(d) ? d.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    }
+
+    function loadState() {
+      try {
+        const storedTx = localStorage.getItem('pb_v3_tx');
+        if (storedTx) state.tx = JSON.parse(storedTx);
+        const storedBg = localStorage.getItem('pb_v3_bg');
+        if (storedBg) state.bg = JSON.parse(storedBg);
+        const storedRl = localStorage.getItem('pb_v3_rl');
+        if (storedRl) state.rl = JSON.parse(storedRl);
+      } catch (e) {}
+      if (!state.bg[state.cyc]) state.bg[state.cyc] = { ...DEFAULT_TARGETS };
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem('pb_v3_tx', JSON.stringify(state.tx));
+        localStorage.setItem('pb_v3_bg', JSON.stringify(state.bg));
+        localStorage.setItem('pb_v3_rl', JSON.stringify(state.rl));
+      } catch (e) {}
+    }
+
+    function setTab(name) {
+      ['forecast', 'activity', 'targets', 'import'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('active', t === name);
+        document.getElementById(`nav-${t}`).classList.toggle('active', t === name);
+      });
+      if (name === 'forecast') renderForecast();
+      if (name === 'activity') renderActivity();
+      if (name === 'targets') renderTargets();
+      if (name === 'import') renderRules();
+    }
+
+    function populateCycles() {
+      const cycles = new Set(['2026-07', '2026-08', '2026-09', '2026-10']);
+      state.tx.forEach(t => { if (t.date) cycles.add(getCycleKey(t.date)); });
+      const sel = document.getElementById('cycleSelector');
+      sel.innerHTML = '';
+      Array.from(cycles).sort().reverse().forEach(c => {
+        const [y, m] = c.split('-').map(Number);
+        const opt = document.createElement('option');
+        opt.value = c;
+        const d1 = new Date(y, m - 1, 25).toLocaleString('en', { month: 'short' });
+        const d2 = new Date(y, m, 24).toLocaleString('en', { month: 'short' });
+        opt.textContent = `${d1} 25 – ${d2} 24`;
+        sel.appendChild(opt);
+      });
+      sel.value = state.cyc;
+      updateHeader();
+    }
+
+    function updateHeader() {
+      const [y, m] = state.cyc.split('-').map(Number);
+      const d1 = new Date(y, m - 1, 25).toLocaleString('en', { month: 'short' });
+      const d2 = new Date(y, m, 24).toLocaleString('en', { month: 'short' });
+      document.getElementById('hdr-dates').textContent = `25 ${d1} – 24 ${d2}`;
+    }
+
+    function switchCycle() {
+      state.cyc = document.getElementById('cycleSelector').value;
+      updateHeader();
+      if (!state.bg[state.cyc]) {
+        state.bg[state.cyc] = { ...DEFAULT_TARGETS };
+        saveState();
+      }
+      renderForecast();
+      renderActivity();
+      renderTargets();
+    }
+
+    function matchCategory(desc) {
+      const s = (desc || '').toLowerCase().replace(/[^a-z0-9]/g, ' ');
+      for (const r of state.rl) {
+        if (s.includes(r.p.toLowerCase())) return r.c;
+      }
+      return 'General Retail & Ad-Hoc Misc';
+    }
+
+    function handleBankCSV(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        const lines = ev.target.result.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
+        let count = 0;
+        const dateRegex = /^\d{1,2}[-/][A-Za-z0-9]{2,4}[-/]\d{2,4}$|^\d{1,2}[A-Za-z]{3}\d{4}$/;
+
+        lines.forEach(line => {
+          const lLow = line.toLowerCase();
+          if (lLow.startsWith('statement enquiry') || lLow.startsWith('account number') || lLow.startsWith('account description') || lLow.startsWith('statement number')) return;
+
+          const parts = line.split(',').map(p => p.trim());
+          if (parts.length < 3) return;
+
+          let rawDate, desc, rawAmtStr;
+
+          // Differentiate between 4-column MasterCC (TransDate, PostDate, Desc, Amt) and Current Account (Date, Desc, Amt)
+          if (parts.length >= 4 && dateRegex.test(parts[1])) {
+            rawDate = parts[0];
+            desc = parts[2];
+            rawAmtStr = parts[3];
+          } else {
+            rawDate = parts[0];
+            desc = parts[1];
+            rawAmtStr = parts[2];
+          }
+
+          const dateStr = parseBankDate(rawDate);
+          const rawAmt = parseFloat(rawAmtStr.replace(/[^0-9.-]/g, ''));
+
+          if (!isNaN(rawAmt) && desc) {
+            const isSal = line.toUpperCase().includes('SALARY') || desc.toLowerCase().includes('salary');
+            const isTransfer = desc.toLowerCase().includes('mastercc') || desc.toLowerCase().includes('internet banking transfer');
+            const amtAbs = Math.abs(rawAmt);
+
+            const dup = state.tx.some(t => t.date === dateStr && t.description === desc && Math.abs(t.amount - amtAbs) < 0.01);
+            if (!dup) {
+              let cat = matchCategory(desc);
+              if (isSal) cat = 'Income';
+              if (isTransfer) cat = 'CC Payment / Transfer';
+
+              const isExp = (cat !== 'Income' && cat !== 'CC Payment / Transfer') && (rawAmt < 0 || (!isSal && rawAmt > 0));
+
+              state.tx.push({
+                id: 'id_' + Math.random().toString(36).substr(2, 9),
+                date: dateStr,
+                description: desc,
+                amount: amtAbs,
+                isExp: isExp,
+                category: cat
+              });
+              count++;
+            }
+          }
+        });
+
+        saveState();
+        populateCycles();
+        alert(`Successfully imported ${count} transactions.`);
+        setTab('forecast');
+      };
+      reader.readAsText(file);
+    }
+
+    function renderForecast() {
+      const cycleTxs = state.tx.filter(t => t.date && getCycleKey(t.date) === state.cyc);
+      const targets = state.bg[state.cyc] || DEFAULT_TARGETS;
+
+      let income = 0;
+      let spent = 0;
+      const catSpent = {};
+      Object.values(BUDGET_GROUPS).flat().forEach(c => catSpent[c] = 0);
+
+      cycleTxs.forEach(t => {
+        if (t.category === 'Income') {
+          income += t.amount;
+        } else if (t.category === 'CC Payment / Transfer') {
+          // Excluded from spending and income to avoid double-counting
+        } else if (t.isExp) {
+          catSpent[t.category] = (catSpent[t.category] || 0) + t.amount;
+          spent += t.amount;
+        }
+      });
+
+      document.getElementById('dash-inc').textContent = `R ${(income > 0 ? income : 82858).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
+      document.getElementById('dash-spent').textContent = `R ${spent.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
+
+      const { start, end } = getCycleRange(state.cyc);
+      const now = new Date();
+      const msDay = 86400000;
+      let daysLeft = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / msDay));
+      if (now < start) daysLeft = 30;
+      if (now > end) daysLeft = 0;
+
+      document.getElementById('badge-days-left').textContent = `${daysLeft} days left`;
+
+      let varSpent = 0;
+      [...BUDGET_GROUPS['Variable Necessities'], ...BUDGET_GROUPS['Controlled Discretionary']].forEach(c => {
+        varSpent += (catSpent[c] || 0);
+      });
+
+      const safeWk = Math.max(0, 27000 - varSpent) / Math.max(1, daysLeft / 7);
+      document.getElementById('dash-safe-wk').textContent = `R ${Math.round(safeWk).toLocaleString('en-ZA')} / wk`;
+      document.getElementById('dash-pace-tag').textContent = safeWk < 3500 ? 'Pace: High' : 'On Track';
+
+      // 4-Week Pacing
+      const pacingEl = document.getElementById('pacingList');
+      pacingEl.innerHTML = '';
+      const weeks = [
+        { name: 'Week 1 (Day 1–7)', s: 1, e: 7, lim: 6750 },
+        { name: 'Week 2 (Day 8–14)', s: 8, e: 14, lim: 6750 },
+        { name: 'Week 3 (Day 15–21)', s: 15, e: 21, lim: 6750 },
+        { name: 'Week 4+ (Day 22–End)', s: 22, e: 31, lim: 6750 }
+      ];
+
+      weeks.forEach(w => {
+        let wSpent = 0;
+        cycleTxs.forEach(t => {
+          if (!t.isExp || t.category === 'Income' || t.category === 'CC Payment / Transfer') return;
+          const off = Math.floor((new Date(t.date) - start) / msDay) + 1;
+          if (off >= w.s && off <= w.e) wSpent += t.amount;
+        });
+        const pct = Math.min(Math.round((wSpent / w.limit) * 100), 100);
+        pacingEl.innerHTML += `
+          <div style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: #cbd5e1;">
+              <span>${w.name}</span>
+              <span>R ${wSpent.toFixed(0)} <span style="color:var(--text-muted);">/</span> R ${w.limit}</span>
+            </div>
+            <div class="prog-track">
+              <div class="prog-fill ${wSpent > w.limit ? 'prog-over' : ''}" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `;
+      });
+
+      // Categories Breakdown
+      const catEl = document.getElementById('categoryBreakdownList');
+      catEl.innerHTML = '';
+      Object.keys(BUDGET_GROUPS).forEach(grp => {
+        if (grp === 'Income' || grp === 'Internal Transfers') return;
+        let html = `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);"><div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">${grp}</div>`;
+        BUDGET_GROUPS[grp].forEach(c => {
+          const tVal = parseFloat(targets[c] || 0);
+          const sVal = catSpent[c] || 0;
+          const pct = tVal > 0 ? Math.min(Math.round((sVal / tVal) * 100), 100) : 0;
+          html += `
+            <div style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11px;">
+                <span style="color: #e2e8f0;">${c}</span>
+                <span style="color: var(--text-muted); font-family: monospace;">R ${sVal.toFixed(0)} / R ${tVal.toFixed(0)}</span>
+              </div>
+              <div class="prog-track">
+                <div class="prog-fill ${sVal > tVal ? 'prog-over' : ''}" style="width: ${pct}%;"></div>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+        catEl.innerHTML += html;
+      });
+    }
+
+    function renderActivity() {
+      const q = (document.getElementById('txSearch').value || '').toLowerCase();
+      const list = state.tx.filter(t => t.date && getCycleKey(t.date) === state.cyc && (t.description.toLowerCase().includes(q) || t.category.toLowerCase().includes(q)));
+
+      document.getElementById('badge-tx-count').textContent = `${list.length} records`;
+      const container = document.getElementById('activityList');
+      container.innerHTML = '';
+
+      if (list.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 32px;">No transactions recorded for this cycle.</div>';
+        return;
+      }
+
+      list.forEach(t => {
+        const isIncome = t.category === 'Income';
+        const isTransfer = t.category === 'CC Payment / Transfer';
+        const color = isIncome ? 'var(--accent)' : (isTransfer ? 'var(--text-muted)' : '#f8fafc');
+
+        container.innerHTML += `
+          <div class="tx-card" onclick="openCatModal('${t.id}')">
+            <div style="max-width: 65%;">
+              <div style="font-size: 12px; font-weight: 700; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${t.description}</div>
+              <div style="display: flex; gap: 6px; align-items: center; margin-top: 3px;">
+                <span style="font-size: 10px; color: var(--text-muted);">${t.date}</span>
+                <span class="badge">${t.category} ✏️</span>
+              </div>
+            </div>
+            <div style="font-size: 13px; font-weight: 800; font-family: monospace; color: ${color};">
+              ${isIncome ? '+' : (isTransfer ? '⇄ ' : '-')}R ${t.amount.toFixed(2)}
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function renderTargets() {
+      document.getElementById('targetsCycleLabel').textContent = state.cyc;
+      const container = document.getElementById('targetsInputList');
+      container.innerHTML = '';
+      const targets = state.bg[state.cyc] || DEFAULT_TARGETS;
+
+      Object.keys(BUDGET_GROUPS).forEach(grp => {
+        if (grp === 'Income' || grp === 'Internal Transfers') return;
+        let html = `<div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border);"><div style="font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">${grp}</div>`;
+        BUDGET_GROUPS[grp].forEach(c => {
+          const v = targets[c] !== undefined ? targets[c] : '';
+          const key = c.replace(/[^a-zA-Z0-9]/g, '');
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px;">
+              <span style="color: #cbd5e1;">${c}</span>
+              <input type="number" id="inp_${key}" value="${v}" placeholder="0" style="width: 110px; text-align: right; font-family: monospace;" />
+            </div>
+          `;
+        });
+        html += `</div>`;
+        container.innerHTML += html;
+      });
+    }
+
+    function saveTargetValues() {
+      if (!state.bg[state.cyc]) state.bg[state.cyc] = {};
+      Object.values(BUDGET_GROUPS).flat().forEach(c => {
+        if (c === 'Income' || c === 'CC Payment / Transfer') return;
+        const key = c.replace(/[^a-zA-Z0-9]/g, '');
+        const inp = document.getElementById(`inp_${key}`);
+        if (inp) state.bg[state.cyc][c] = parseFloat(inp.value) || 0;
+      });
+      saveState();
+      alert('Budget targets saved.');
+      setTab('forecast');
+    }
+
+    function renderRules() {
+      const container = document.getElementById('rulesList');
+      container.innerHTML = '';
+      state.rl.forEach((r, idx) => {
+        container.innerHTML += `
+          <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card-inner); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; font-size: 11px;">
+            <span>"${r.p}" &rarr; <b style="color:var(--accent);">${r.c}</b></span>
+            <button onclick="removeRule(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer;">✕</button>
+          </div>
+        `;
+      });
+    }
+
+    function addRulePrompt() {
+      const p = prompt('Enter keyword pattern (e.g. Woolworths, Hendrik):');
+      if (!p) return;
+      const all = Object.values(BUDGET_GROUPS).flat();
+      const c = prompt(`Assign to Category:\n${all.join('\n')}`, 'Groceries & Household Supplies');
+      if (!c) return;
+      state.rl.unshift({ p: p.trim().toLowerCase(), c: c.trim() });
+      saveState();
+      renderRules();
+    }
+
+    function removeRule(idx) {
+      state.rl.splice(idx, 1);
+      saveState();
+      renderRules();
+    }
+
+    function populateModalCategories() {
+      const sel = document.getElementById('modalSelect');
+      sel.innerHTML = '';
+      Object.keys(BUDGET_GROUPS).forEach(grp => {
+        const og = document.createElement('optgroup');
+        og.label = grp;
+        BUDGET_GROUPS[grp].forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          og.appendChild(opt);
+        });
+        sel.appendChild(og);
+      });
+    }
+
+    function openCatModal(id) {
+      const t = state.tx.find(x => x.id === id);
+      if (!t) return;
+      activeEditingId = id;
+      document.getElementById('modalDesc').textContent = t.description;
+      document.getElementById('modalMeta').textContent = `${t.date} • R ${t.amount.toFixed(2)}`;
+      document.getElementById('modalSelect').value = t.category;
+      document.getElementById('modalRuleCheck').checked = true;
+      document.getElementById('catModal').classList.add('show');
+    }
+
+    function closeCatModal() {
+      activeEditingId = null;
+      document.getElementById('catModal').classList.remove('show');
+    }
+
+    function applyModalEdit() {
+      if (!activeEditingId) return;
+      const t = state.tx.find(x => x.id === activeEditingId);
+      if (!t) return;
+      const newCat = document.getElementById('modalSelect').value;
+      const saveRule = document.getElementById('modalRuleCheck').checked;
+
+      t.category = newCat;
+      t.isExp = (newCat !== 'Income' && newCat !== 'CC Payment / Transfer');
+
+      if (saveRule) {
+        const raw = t.description.toLowerCase().trim();
+        const pat = raw.split(/[\s_,-]+/)[0] || raw;
+        state.rl = state.rl.filter(r => r.p !== pat);
+        state.rl.unshift({ p: pat, c: newCat });
+
+        state.tx.forEach(other => {
+          if (other.description.toLowerCase().includes(pat)) {
+            other.category = newCat;
+            other.isExp = (newCat !== 'Income' && newCat !== 'CC Payment / Transfer');
+          }
+        });
+      }
+
+      saveState();
+      closeCatModal();
+      renderForecast();
+      renderActivity();
+      renderRules();
+    }
+
+    function clearStorage() {
+      if (confirm('Reset stored transactions and reload defaults?')) {
+        localStorage.clear();
+        state = { tx: [], bg: { '2026-08': { ...DEFAULT_TARGETS } }, rl: [...DEFAULT_RULES], cyc: '2026-08' };
+        saveState();
+        location.reload();
+      }
+    }
+
+    function exportDataJSON() {
+      const str = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const a = document.createElement('a');
+      a.href = str;
+      a.download = `budget_${state.cyc}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    window.onload = function() {
+      loadState();
+      populateCycles();
+      populateModalCategories();
+      renderForecast();
+      renderTargets();
+      renderRules();
+    };
+  </script>
+</body>
+</html>
