@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Pocket Budget Tracker</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    body { -webkit-tap-highlight-color: transparent; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans pb-24 antialiased min-h-screen select-none">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex justify-between items-center">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-black">
+        <i class="fa-solid fa-wallet text-sm"></i>
+      </div>
+      <h1 class="text-lg font-bold tracking-tight">PocketBudget</h1>
+    </div>
+    <div class="flex items-center space-x-2">
+      <select id="monthSelector" onchange="switchMonth()" class="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"></select>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-md mx-auto p-4 space-y-4">
+
+    <!-- TAB 1: DASHBOARD -->
+    <section id="tab-dashboard" class="space-y-4">
+      <!-- High-Level Overview Cards -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Budget</p>
+          <p id="dash-total-budget" class="text-xl font-bold mt-1 text-slate-100">R 0.00</p>
+          <p id="dash-burn-rate" class="text-[11px] text-slate-400 mt-1">Burn Rate: 0%</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Spent</p>
+          <p id="dash-total-spent" class="text-xl font-bold mt-1 text-rose-400">R 0.00</p>
+          <p id="dash-remaining" class="text-[11px] text-emerald-400 mt-1">Remaining: R 0.00</p>
+        </div>
+      </div>
+
+      <!-- Spending Progress Bar -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div class="flex justify-between text-xs font-medium">
+          <span class="text-slate-400">Monthly Burn Progress</span>
+          <span id="dash-progress-label" class="text-slate-200">0%</span>
+        </div>
+        <div class="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+          <div id="dash-progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Visual Breakdown -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h2 class="text-sm font-semibold text-slate-200">Spending by Category</h2>
+        <div class="h-48 relative flex items-center justify-center">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Category Burn List -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h2 class="text-sm font-semibold text-slate-200">Category Allocations</h2>
+        <div id="categoryBreakdownList" class="space-y-3">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: TRANSACTIONS -->
+    <section id="tab-transactions" class="space-y-4 hidden">
+      <div class="flex justify-between items-center">
+        <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Transactions</h2>
+        <span id="tx-count" class="text-xs text-slate-500">0 records</span>
+      </div>
+
+      <input type="text" id="txSearch" oninput="renderTransactions()" placeholder="Search description, category..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+
+      <div id="transactionsList" class="space-y-2.5">
+        <!-- Injected via JS -->
+      </div>
+    </section>
+
+    <!-- TAB 3: IMPORT & RULES -->
+    <section id="tab-import" class="space-y-4 hidden">
+      <!-- File Upload Box -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
+        <div class="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-lg">
+          <i class="fa-solid fa-file-csv"></i>
+        </div>
+        <div>
+          <p class="text-sm font-semibold">Import Bank CSV</p>
+          <p class="text-xs text-slate-400 mt-0.5">Supports FNB, Standard Bank, Capitec, Nedbank & generic bank CSVs.</p>
+        </div>
+        <label class="block">
+          <span class="inline-block bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition">Select CSV File</span>
+          <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVUpload(event)" />
+        </label>
+      </div>
+
+      <!-- Auto Categorization Rules -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div class="flex justify-between items-center">
+          <h2 class="text-sm font-semibold text-slate-200">Keyword Rules</h2>
+          <button onclick="addNewRuleModal()" class="text-xs text-emerald-400 font-semibold">+ Add Rule</button>
+        </div>
+        <div id="rulesList" class="space-y-2">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- Data Reset & Export -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Manage Stored Data</p>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button onclick="exportData()" class="bg-slate-800 text-xs py-2 rounded-xl text-slate-200 font-medium">Export JSON</button>
+          <button onclick="clearAllData()" class="bg-rose-950/40 text-rose-400 border border-rose-900/30 text-xs py-2 rounded-xl font-medium">Clear All Data</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: BUDGET SETUP -->
+    <section id="tab-budget" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+        <h2 class="text-sm font-semibold text-slate-200">Monthly Targets</h2>
+        <div id="budgetInputsList" class="space-y-3">
+          <!-- Injected via JS -->
+        </div>
+        <button onclick="saveBudgets()" class="w-full bg-emerald-500 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition">Save Budget Targets</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Navigation Bar -->
+  <nav class="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-6 py-2 flex justify-around">
+    <button onclick="setTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-emerald-400 transition">
+      <i class="fa-solid fa-chart-pie text-base"></i>
+      <span class="text-[10px] mt-1 font-semibold">Overview</span>
+    </button>
+    <button onclick="setTab('transactions')" id="nav-transactions" class="flex flex-col items-center text-slate-400 transition">
+      <i class="fa-solid fa-list text-base"></i>
+      <span class="text-[10px] mt-1 font-semibold">Activity</span>
+    </button>
+    <button onclick="setTab('budget')" id="nav-budget" class="flex flex-col items-center text-slate-400 transition">
+      <i class="fa-solid fa-sliders text-base"></i>
+      <span class="text-[10px] mt-1 font-semibold">Targets</span>
+    </button>
+    <button onclick="setTab('import')" id="nav-import" class="flex flex-col items-center text-slate-400 transition">
+      <i class="fa-solid fa-gear text-base"></i>
+      <span class="text-[10px] mt-1 font-semibold">Import</span>
+    </button>
+  </nav>
+
+  <!-- JavaScript Engine -->
+  <script>
+    const DEFAULT_CATEGORIES = [
+      'Housing & Levies', 'Groceries', 'Utilities & Power', 'Transport & Fuel', 
+      'Dining & Takeaways', 'Subscriptions', 'Shopping', 'Healthcare', 'Savings & Investments', 'Income'
+    ];
+
+    const DEFAULT_RULES = [
+      { keyword: 'woolworths', category: 'Groceries' },
+      { keyword: 'checkers', category: 'Groceries' },
+      { keyword: 'pick n pay', category: 'Groceries' },
+      { keyword: 'spar', category: 'Groceries' },
+      { keyword: 'engen', category: 'Transport & Fuel' },
+      { keyword: 'shell', category: 'Transport & Fuel' },
+      { keyword: 'sasol', category: 'Transport & Fuel' },
+      { keyword: 'uber', category: 'Transport & Fuel' },
+      { keyword: 'netflix', category: 'Subscriptions' },
+      { keyword: 'spotify', category: 'Subscriptions' },
+      { keyword: 'showmax', category: 'Subscriptions' },
+      { keyword: 'apple.com', category: 'Subscriptions' },
+      { keyword: 'takealot', category: 'Shopping' },
+      { keyword: 'salary', category: 'Income' }
+    ];
+
+    let state = {
+      transactions: JSON.parse(localStorage.getItem('pb_transactions') || '[]'),
+      budgets: JSON.parse(localStorage.getItem('pb_budgets') || '{}'),
+      rules: JSON.parse(localStorage.getItem('pb_rules') || JSON.stringify(DEFAULT_RULES)),
+      selectedMonth: ''
+    };
+
+    let chartInstance = null;
+
+    function init() {
+      populateMonthSelector();
+      renderDashboard();
+      renderBudgetsInput();
+      renderRules();
+    }
+
+    function saveState() {
+      localStorage.setItem('pb_transactions', JSON.stringify(state.transactions));
+      localStorage.setItem('pb_budgets', JSON.stringify(state.budgets));
+      localStorage.setItem('pb_rules', JSON.stringify(state.rules));
+    }
+
+    function setTab(tabName) {
+      ['dashboard', 'transactions', 'import', 'budget'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tabName);
+        const navBtn = document.getElementById(`nav-${t}`);
+        if (t === tabName) {
+          navBtn.classList.remove('text-slate-400');
+          navBtn.classList.add('text-emerald-400');
+        } else {
+          navBtn.classList.add('text-slate-400');
+          navBtn.classList.remove('text-emerald-400');
+        }
+      });
+      if (tabName === 'dashboard') renderDashboard();
+      if (tabName === 'transactions') renderTransactions();
+    }
+
+    function populateMonthSelector() {
+      const months = new Set();
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      months.add(currentMonthKey);
+
+      state.transactions.forEach(t => {
+        if (t.date) months.add(t.date.substring(0, 7));
+      });
+
+      const selector = document.getElementById('monthSelector');
+      selector.innerHTML = '';
+      Array.from(months).sort().reverse().forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        selector.appendChild(opt);
+      });
+
+      state.selectedMonth = selector.value || currentMonthKey;
+    }
+
+    function switchMonth() {
+      state.selectedMonth = document.getElementById('monthSelector').value;
+      renderDashboard();
+      renderTransactions();
+    }
+
+    function getMonthlyTransactions() {
+      return state.transactions.filter(t => t.date && t.date.startsWith(state.selectedMonth));
+    }
+
+    function categorizeDescription(desc) {
+      const lower = (desc || '').toLowerCase();
+      for (const r of state.rules) {
+        if (lower.includes(r.keyword.toLowerCase())) return r.category;
+      }
+      return 'Uncategorized';
+    }
+
+    function handleCSVUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          let count = 0;
+          results.data.forEach(row => {
+            const keys = Object.keys(row);
+            const dateKey = keys.find(k => /date/i.test(k));
+            const descKey = keys.find(k => /desc|narrative|detail|memo/i.test(k));
+            const amtKey = keys.find(k => /amount|debit|value/i.test(k));
+
+            if (dateKey && descKey && amtKey && row[amtKey]) {
+              const rawAmt = parseFloat(String(row[amtKey]).replace(/[^0-9.-]+/g, ''));
+              if (!isNaN(rawAmt)) {
+                const desc = String(row[descKey]).trim();
+                const d = new Date(row[dateKey]);
+                const formattedDate = !isNaN(d) ? d.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+                
+                state.transactions.push({
+                  id: 'tx_' + Math.random().toString(36).substr(2, 9),
+                  date: formattedDate,
+                  description: desc,
+                  amount: Math.abs(rawAmt),
+                  isExpense: rawAmt < 0 || !/credit/i.test(amtKey),
+                  category: categorizeDescription(desc)
+                });
+                count++;
+              }
+            }
+          });
+          saveState();
+          populateMonthSelector();
+          alert(`Successfully imported ${count} transactions.`);
+          setTab('dashboard');
+        }
+      });
+    }
+
+    function renderDashboard() {
+      const txs = getMonthlyTransactions();
+      const monthBudgets = state.budgets[state.selectedMonth] || {};
+
+      let totalBudget = 0;
+      DEFAULT_CATEGORIES.forEach(c => {
+        if (c !== 'Income') totalBudget += parseFloat(monthBudgets[c] || 0);
+      });
+
+      const catSpent = {};
+      DEFAULT_CATEGORIES.forEach(c => catSpent[c] = 0);
+      catSpent['Uncategorized'] = 0;
+
+      let totalSpent = 0;
+      txs.forEach(t => {
+        if (t.isExpense && t.category !== 'Income') {
+          catSpent[t.category] = (catSpent[t.category] || 0) + t.amount;
+          totalSpent += t.amount;
+        }
+      });
+
+      const remaining = totalBudget - totalSpent;
+      const burnRate = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
+
+      document.getElementById('dash-total-budget').textContent = `R ${totalBudget.toFixed(2)}`;
+      document.getElementById('dash-total-spent').textContent = `R ${totalSpent.toFixed(2)}`;
+      document.getElementById('dash-remaining').textContent = `Remaining: R ${remaining.toFixed(2)}`;
+      document.getElementById('dash-burn-rate').textContent = `Burn Rate: ${burnRate}%`;
+      document.getElementById('dash-progress-label').textContent = `${burnRate}%`;
+
+      const progressBar = document.getElementById('dash-progress-bar');
+      progressBar.style.width = `${Math.min(burnRate, 100)}%`;
+      progressBar.className = `h-full transition-all duration-300 ${burnRate > 100 ? 'bg-rose-500' : burnRate > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`;
+
+      // Render List
+      const listContainer = document.getElementById('categoryBreakdownList');
+      listContainer.innerHTML = '';
+      Object.keys(catSpent).forEach(cat => {
+        if (cat === 'Income' || (catSpent[cat] === 0 && !monthBudgets[cat])) return;
+        const b = parseFloat(monthBudgets[cat] || 0);
+        const s = catSpent[cat];
+        const pct = b > 0 ? Math.min(Math.round((s / b) * 100), 100) : 0;
+
+        listContainer.innerHTML += `
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="font-medium text-slate-300">${cat}</span>
+              <span class="text-slate-400">R ${s.toFixed(0)} / R ${b.toFixed(0)}</span>
+            </div>
+            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div class="h-full ${s > b && b > 0 ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      });
+
+      // Render Chart
+      const ctx = document.getElementById('categoryChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+
+      const activeCategories = Object.keys(catSpent).filter(k => catSpent[k] > 0 && k !== 'Income');
+      const chartValues = activeCategories.map(k => catSpent[k]);
+
+      chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: activeCategories,
+          datasets: [{
+            data: chartValues.length ? chartValues : [1],
+            backgroundColor: chartValues.length ? ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#f43f5e', '#64748b'] : ['#334155'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function renderTransactions() {
+      const search = (document.getElementById('txSearch').value || '').toLowerCase();
+      const txs = getMonthlyTransactions().filter(t => 
+        t.description.toLowerCase().includes(search) || t.category.toLowerCase().includes(search)
+      );
+
+      document.getElementById('tx-count').textContent = `${txs.length} records`;
+      const container = document.getElementById('transactionsList');
+      container.innerHTML = '';
+
+      if (txs.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-500 text-center py-6">No transactions found for this month.</p>';
+        return;
+      }
+
+      txs.forEach(t => {
+        container.innerHTML += `
+          <div class="bg-slate-900 border border-slate-800/80 rounded-xl p-3 flex justify-between items-center">
+            <div class="space-y-0.5 max-w-[65%]">
+              <p class="text-xs font-semibold text-slate-200 truncate">${t.description}</p>
+              <div class="flex items-center space-x-2">
+                <span class="text-[10px] text-slate-500">${t.date}</span>
+                <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">${t.category}</span>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-xs font-bold ${t.isExpense ? 'text-slate-200' : 'text-emerald-400'}">
+                ${t.isExpense ? '-' : '+'}R ${t.amount.toFixed(2)}
+              </p>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function renderBudgetsInput() {
+      const container = document.getElementById('budgetInputsList');
+      container.innerHTML = '';
+      const monthBudgets = state.budgets[state.selectedMonth] || {};
+
+      DEFAULT_CATEGORIES.forEach(c => {
+        if (c === 'Income') return;
+        const val = monthBudgets[c] || '';
+        container.innerHTML += `
+          <div class="flex justify-between items-center text-xs">
+            <span class="text-slate-300 font-medium">${c}</span>
+            <input type="number" id="budget-input-${c}" value="${val}" placeholder="0" class="w-28 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-right text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+          </div>
+        `;
+      });
+    }
+
+    function saveBudgets() {
+      if (!state.budgets[state.selectedMonth]) state.budgets[state.selectedMonth] = {};
+      DEFAULT_CATEGORIES.forEach(c => {
+        if (c === 'Income') return;
+        const input = document.getElementById(`budget-input-${c}`);
+        if (input) state.budgets[state.selectedMonth][c] = parseFloat(input.value) || 0;
+      });
+      saveState();
+      alert('Budget saved successfully.');
+      setTab('dashboard');
+    }
+
+    function renderRules() {
+      const container = document.getElementById('rulesList');
+      container.innerHTML = '';
+      state.rules.forEach((r, idx) => {
+        container.innerHTML += `
+          <div class="flex justify-between items-center bg-slate-800/50 px-3 py-2 rounded-xl text-xs">
+            <span class="text-slate-300 font-medium">"${r.keyword}" &rarr; <span class="text-emerald-400">${r.category}</span></span>
+            <button onclick="deleteRule(${idx})" class="text-rose-400 hover:text-rose-300 ml-2"><i class="fa-solid fa-trash-can text-[11px]"></i></button>
+          </div>
+        `;
+      });
+    }
+
+    function addNewRuleModal() {
+      const keyword = prompt('Enter description keyword (e.g. Checkers, Shell):');
+      if (!keyword) return;
+      const category = prompt(`Enter category name (${DEFAULT_CATEGORIES.join(', ')}):`, 'Groceries');
+      if (!category) return;
+
+      state.rules.push({ keyword: keyword.trim(), category: category.trim() });
+      saveState();
+      renderRules();
+    }
+
+    function deleteRule(idx) {
+      state.rules.splice(idx, 1);
+      saveState();
+      renderRules();
+    }
+
+    function clearAllData() {
+      if (confirm('Clear all stored transactions, budgets, and rules?')) {
+        localStorage.clear();
+        state.transactions = [];
+        state.budgets = {};
+        state.rules = DEFAULT_RULES;
+        location.reload();
+      }
+    }
+
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "budget_data.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
