@@ -47,6 +47,7 @@
     
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
     .metric-val { font-size: 18px; font-weight: 800; margin-top: 2px; }
     .metric-sub { font-size: 10px; color: var(--text-muted); }
     .highlight-box { background: var(--card-inner); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; }
@@ -72,7 +73,6 @@
     .preset-pill { background: var(--card-inner); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; cursor: pointer; text-align: center; }
     .preset-pill.active { background: var(--accent); color: #022c22; border-color: var(--accent); }
 
-    /* Interactive Slider Styling */
     .slider-container { background: var(--card-inner); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-top: 10px; }
     .slider-range { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 5px; background: #1e293b; outline: none; margin: 10px 0; }
     .slider-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 2px solid #022c22; }
@@ -83,6 +83,7 @@
     .btn:active { opacity: 0.85; }
     .btn-secondary { background: #1e293d; color: var(--text); border: 1px solid var(--border); }
     .btn-blue { background: #2563eb; color: #ffffff; }
+    .btn-purple { background: var(--purple); color: #ffffff; }
     .btn-warning { background: #451a03; color: #fb923c; border: 1px solid #7c2d12; font-size: 12px; padding: 10px; }
     .btn-danger { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; font-size: 12px; padding: 10px; }
     
@@ -600,8 +601,10 @@
       </div>
     </div>
 
-    <!-- TAB 6: IMPORT & RULES -->
+    <!-- TAB 6: IMPORT & RULES (WITH BACKUP RESTORE) -->
     <div id="tab-import" class="tab-view">
+      
+      <!-- Bank CSV Upload -->
       <div class="card" style="text-align: center; padding: 24px 16px;">
         <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
         <div style="font-size: 15px; font-weight: 800; margin-bottom: 4px;">Upload Bank CSV</div>
@@ -612,6 +615,7 @@
         </label>
       </div>
 
+      <!-- Auto Categorization Rules -->
       <div class="card">
         <div class="card-title">
           <span>Categorization Rules (<span id="ruleCountTag">0</span>)</span>
@@ -620,10 +624,18 @@
         <div id="rulesList" style="max-height: 220px; overflow-y: auto;"></div>
       </div>
 
+      <!-- Storage, Backup Export & JSON Restore -->
       <div class="card">
-        <div class="card-title">Storage & Maintenance</div>
+        <div class="card-title">Storage & Multi-Device Sync</div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <button class="btn btn-secondary" onclick="exportDataJSON()">Export Complete Backup (JSON)</button>
+          
+          <!-- Restore Backup File Picker -->
+          <label class="btn btn-purple" style="cursor: pointer; font-size: 13px; padding: 12px;">
+            📥 Restore Backup (JSON File)
+            <input type="file" id="jsonRestorePicker" accept=".json" style="display: none;" onchange="importDataJSON(event)" />
+          </label>
+          
           <button class="btn btn-warning" onclick="clearTransactionsOnly()">Clear Transactions (Keep Learned Rules)</button>
           <button class="btn btn-danger" onclick="clearEverything()">Factory Reset All</button>
         </div>
@@ -2232,6 +2244,42 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
+    }
+
+    // Restore Backup JSON Function
+    function importDataJSON(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        try {
+          const imported = JSON.parse(ev.target.result);
+          if (!imported || typeof imported !== 'object') {
+            alert('Invalid backup file format.');
+            return;
+          }
+
+          if (confirm('Restore this backup? This will sync your transactions, targets, rules, investment data, and fasting logs.')) {
+            if (imported.tx) state.tx = imported.tx;
+            if (imported.bg) state.bg = imported.bg;
+            if (imported.rl) state.rl = imported.rl;
+            if (imported.inv) state.inv = imported.inv;
+            if (imported.fasting) state.fasting = imported.fasting;
+            if (imported.customSavingsTarget) state.customSavingsTarget = imported.customSavingsTarget;
+            if (imported.cyc) state.cyc = imported.cyc;
+
+            saveState();
+            initApp();
+            alert('Backup restored successfully! All data has been synchronized.');
+            setTab('forecast');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Could not parse JSON backup file. Please ensure it is a valid PocketTracker backup.');
+        }
+      };
+      reader.readAsText(file);
     }
 
     /* SAFE BOOT SEQUENCE */
