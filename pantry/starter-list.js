@@ -1,0 +1,81 @@
+// Starting weekly list. qty is the weekly target; step is how much the amount
+// moves by when you adjust it. kind 'restock' = long-life items you only buy
+// when you mark them as running low.
+const STARTER = [
+  // Protein
+  { cat: 'Protein', name: 'Chicken breast or skinless thighs', qty: 1.5, unit: 'kg', step: 0.25 },
+  { cat: 'Protein', name: 'Skin-on chicken portions for braai', qty: 1.5, unit: 'kg', step: 0.25 },
+  { cat: 'Protein', name: 'Chicken mince', qty: 1, unit: 'kg', step: 0.25 },
+  { cat: 'Protein', name: 'Extra-lean beef mince', qty: 1, unit: 'kg', step: 0.25 },
+  { cat: 'Protein', name: 'Lean steak', qty: 1, unit: 'kg', step: 0.25 },
+  { cat: 'Protein', name: 'Boerewors', qty: 750, unit: 'g', step: 250 },
+  { cat: 'Protein', name: 'Pork fillet', qty: 750, unit: 'g', step: 250 },
+  { cat: 'Protein', name: 'Hake fillets', qty: 1, unit: 'kg', step: 0.25 },
+  { cat: 'Protein', name: 'Eggs', qty: 30, unit: 'eggs', step: 6 },
+  { cat: 'Protein', name: 'Tuna in brine', qty: 4, unit: 'tins', step: 1 },
+  { cat: 'Protein', name: 'Tinned mussels', qty: 3, unit: 'tins', step: 1 },
+  { cat: 'Protein', name: 'Tinned mackerel', qty: 3, unit: 'tins', step: 1 },
+  { cat: 'Protein', name: 'Lentils', qty: 2, unit: 'tins', step: 1 },
+  { cat: 'Protein', name: 'Kidney beans or cannellini beans', qty: 2, unit: 'tins', step: 1 },
+  // Dairy
+  { cat: 'Dairy', name: 'Low-fat, high-protein Greek yoghurt', qty: 3, unit: 'kg', step: 0.5 },
+  { cat: 'Dairy', name: 'Low-fat cottage cheese', qty: 500, unit: 'g', step: 250 },
+  { cat: 'Dairy', name: 'Low-fat milk', qty: 2, unit: 'L', step: 1 },
+  { cat: 'Dairy', name: 'Mature cheddar', qty: 400, unit: 'g', step: 100 },
+  { cat: 'Dairy', name: 'Reduced-fat mozzarella', qty: 200, unit: 'g', step: 100 },
+  { cat: 'Dairy', name: 'Feta', qty: 200, unit: 'g', step: 100 },
+  { cat: 'Dairy', name: 'Light mayonnaise', qty: 1, unit: 'small jar', step: 1 },
+  { cat: 'Dairy', name: 'Fresh cream', qty: 250, unit: 'ml', step: 250 },
+  // Vegetables
+  { cat: 'Vegetables', name: 'Butternut or mixed squash', qty: 3, unit: 'kg', step: 0.5 },
+  { cat: 'Vegetables', name: 'Baby potatoes', qty: 1.5, unit: 'kg', step: 0.5, note: 'covers white potatoes too' },
+  { cat: 'Vegetables', name: 'Onions', qty: 2, unit: 'kg', step: 0.5 },
+  { cat: 'Vegetables', name: 'Mushrooms', qty: 1.5, unit: 'kg', step: 0.25 },
+  { cat: 'Vegetables', name: 'Baby marrows', qty: 1, unit: 'kg', step: 0.25 },
+  { cat: 'Vegetables', name: 'Broccoli', qty: 1, unit: 'kg', step: 0.25 },
+  { cat: 'Vegetables', name: 'Cauliflower', qty: 1, unit: 'large', step: 1 },
+  { cat: 'Vegetables', name: 'Carrots', qty: 1, unit: 'kg', step: 0.5 },
+  { cat: 'Vegetables', name: 'Peppers', qty: 6, unit: '', step: 1 },
+  { cat: 'Vegetables', name: 'Tomatoes', qty: 1.5, unit: 'kg', step: 0.25 },
+  { cat: 'Vegetables', name: 'Tinned chopped tomatoes', qty: 8, unit: 'tins', step: 1 },
+  { cat: 'Vegetables', name: 'Spinach', qty: 500, unit: 'g', step: 250 },
+  { cat: 'Vegetables', name: 'Green beans', qty: 500, unit: 'g', step: 250 },
+  { cat: 'Vegetables', name: 'Frozen peas', qty: 500, unit: 'g', step: 250 },
+  { cat: 'Vegetables', name: 'Cucumbers', qty: 3, unit: '', step: 1 },
+  { cat: 'Vegetables', name: 'Garlic', qty: 2, unit: 'bulbs', step: 1 },
+  { cat: 'Vegetables', name: 'Lemons', qty: 6, unit: '', step: 1 },
+  { cat: 'Vegetables', name: 'Spring onions', qty: 2, unit: 'bunches', step: 1 },
+  { cat: 'Vegetables', name: 'Fresh parsley or mixed herbs', qty: 1, unit: 'bunch', step: 1 },
+  // Carbohydrates
+  { cat: 'Carbohydrates', name: 'Wholewheat low-GI bread', qty: 2, unit: 'loaves', step: 1 },
+  { cat: 'Carbohydrates', name: 'White bread', qty: 1, unit: 'loaf', step: 1 },
+  { cat: 'Carbohydrates', name: 'White hot-dog rolls', qty: 1, unit: 'pack', step: 1 },
+  { cat: 'Carbohydrates', name: 'Provitas', qty: 2, unit: 'boxes', step: 1 },
+  { cat: 'Carbohydrates', name: 'Wholewheat wraps', qty: 1, unit: 'pack', step: 1 },
+  { cat: 'Carbohydrates', name: 'Rolled oats', qty: 500, unit: 'g', step: 250 },
+  { cat: 'Carbohydrates', name: 'White rice', qty: 1, unit: 'kg', step: 0.5 },
+  { cat: 'Carbohydrates', name: 'Pasta', qty: 500, unit: 'g', step: 250 },
+  { cat: 'Carbohydrates', name: 'Sweet potatoes', qty: 1, unit: 'kg', step: 0.5 },
+  // Fruit
+  { cat: 'Fruit', name: 'Bananas', qty: 12, unit: '', step: 1, note: '10 to 12' },
+  { cat: 'Fruit', name: 'Apples or pears', qty: 8, unit: '', step: 1 },
+  { cat: 'Fruit', name: 'Frozen berries', qty: 1, unit: 'kg', step: 0.5 },
+  { cat: 'Fruit', name: 'Naartjies or seasonal fruit', qty: 1, unit: 'bag', step: 1 },
+  // Sweet snacks
+  { cat: 'Sweet snacks', name: 'Vanilla ice cream', qty: 1, unit: 'tub', step: 1 },
+  { cat: 'Sweet snacks', name: 'Chocolate ice cream', qty: 1, unit: 'tub', step: 1 },
+  { cat: 'Sweet snacks', name: 'Chocolate slab', qty: 1, unit: '', step: 1 },
+  { cat: 'Sweet snacks', name: 'Sugar-free jelly', qty: 2, unit: 'packs', step: 1 },
+  { cat: 'Sweet snacks', name: 'Protein yoghurts or puddings', qty: 4, unit: '', step: 1, note: '3 to 4' },
+  { cat: 'Sweet snacks', name: 'Cocoa powder', kind: 'restock' },
+  { cat: 'Sweet snacks', name: 'Honey or maple syrup', kind: 'restock' },
+  { cat: 'Sweet snacks', name: 'Popcorn kernels or light microwave popcorn', kind: 'restock' },
+  // Sauces and pantry
+  ...['Chutney', 'Dijon or wholegrain mustard', 'Tomato sauce', 'Worcestershire sauce', 'Tomato paste',
+    'Chicken stock', 'Beef stock', 'Cornflour', 'Olive oil or cooking spray', 'Vinegar', 'Mild curry powder',
+    'Cumin', 'Smoked paprika', 'Thyme', 'Oregano', 'Garlic powder', 'Salt and black pepper', 'Low-calorie sweetener']
+    .map((name) => ({ cat: 'Sauces & pantry', name, kind: 'restock' })),
+  // Drinks and alcohol
+  ...['Gin, vodka or whisky', 'Sugar-free tonic', 'Soda water', 'Coke Zero', 'Lemons or limes', 'Dry wine (optional)']
+    .map((name) => ({ cat: 'Drinks & alcohol', name, kind: 'restock' })),
+];
