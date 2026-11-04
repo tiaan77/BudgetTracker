@@ -1,6 +1,6 @@
 // Offline support: cache the app shell, always try the network first for app
 // files so updates arrive, and never cache API calls (Claude, Open Food Facts).
-const CACHE = 'pocketplate-v3';
+const CACHE = 'pocketplate-v4';
 const SHELL = ['./', './index.html', './foods-za.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
