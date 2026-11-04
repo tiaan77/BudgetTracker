@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PocketPantry</title>
+  <meta name="description" content="Weekly shopping list and usage tracker that learns what you actually use." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="PocketPantry" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#111827" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <style>
+    :root {
+      --bg: #0b0f19; --card: #151d2e; --card-inner: #0f1624; --border: #232f48;
+      --accent: #f59e0b; --accent-dim: rgba(245,158,11,.15); --on-accent: #2a1a02;
+      --text: #f8fafc; --muted: #94a3b8; --danger: #f43f5e; --danger-dim: rgba(244,63,94,.15);
+      --green: #10b981; --green-dim: rgba(16,185,129,.15); --blue: #3b82f6; --blue-dim: rgba(59,130,246,.15);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); padding-bottom: calc(80px + env(safe-area-inset-bottom)); min-height: 100vh; font-size: 14px; }
+    header { position: sticky; top: 0; z-index: 40; background: #111827; border-bottom: 1px solid var(--border); padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; }
+    .logo img { width: 30px; height: 30px; border-radius: 8px; }
+    .wk { font-size: 12px; font-weight: 700; color: var(--muted); text-align: right; }
+    .container { max-width: 520px; margin: 0 auto; padding: 14px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; }
+    .card-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .muted { color: var(--muted); } .small { font-size: 12px; } .tiny { font-size: 11px; }
+    p.help { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+    .prog-track { width: 100%; height: 6px; background: #1e293b; border-radius: 99px; overflow: hidden; margin-top: 8px; }
+    .prog-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s; }
+    .item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+    .item:first-of-type { border-top: none; }
+    .tick { width: 26px; height: 26px; flex-shrink: 0; border-radius: 8px; border: 2px solid var(--border); background: var(--card-inner); display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--on-accent); cursor: pointer; }
+    .item.got .tick { background: var(--accent); border-color: var(--accent); }
+    .item.got .n { text-decoration: line-through; color: var(--muted); }
+    .item .body { flex: 1; min-width: 0; cursor: pointer; }
+    .item .n { font-weight: 600; font-size: 14px; }
+    .item .d { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .item .q { font-weight: 800; font-size: 14px; white-space: nowrap; text-align: right; cursor: pointer; }
+    .item .q small { display: block; font-size: 10px; font-weight: 600; color: var(--muted); }
+    .more { background: none; border: none; color: var(--muted); font-size: 18px; padding: 2px 4px; cursor: pointer; }
+    .badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #1e293d; color: var(--accent); display: inline-block; margin-right: 3px; }
+    .badge.green { color: #6ee7b7; background: var(--green-dim); }
+    .badge.blue { color: #93c5fd; background: var(--blue-dim); }
+    .badge.red { color: #fda4af; background: var(--danger-dim); }
+    .btn { background: var(--accent); color: var(--on-accent); border: none; border-radius: 10px; padding: 11px 14px; font-weight: 800; font-size: 14px; width: 100%; cursor: pointer; }
+    .btn:disabled { opacity: .5; }
+    .btn.sec { background: #1f293d; color: var(--text); border: 1px solid var(--border); }
+    .btn.danger { background: var(--danger-dim); color: #fda4af; border: 1px solid rgba(244,63,94,.4); }
+    .btn.sm { white-space: nowrap; padding: 6px 10px; font-size: 12px; width: auto; border-radius: 8px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row > * { flex: 1; }
+    .stack > * + * { margin-top: 8px; }
+    label.f { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .4px; }
+    input, select, textarea { width: 100%; background: var(--card-inner); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 16px; outline: none; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { font-size: 13px; min-height: 110px; font-family: ui-monospace, Menlo, monospace; }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip { background: #1f293d; border: 1px solid var(--border); color: var(--text); border-radius: 99px; padding: 7px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .chip.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .chip.out.on { background: var(--danger-dim); border-color: var(--danger); color: #fda4af; }
+    .take { padding: 10px 0; border-top: 1px solid var(--border); }
+    .take:first-of-type { border-top: none; }
+    .take .top { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    .take .top .n { font-weight: 600; }
+    .take .top .had { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .take .chips { gap: 5px; }
+    .take .chip { padding: 6px 9px; }
+    .take .chips .num { width: 58px; padding: 5px 6px; font-size: 14px; border-radius: 99px; text-align: center; }
+    .take.done .n::after { content: ' ✓'; color: var(--green); }
+    .tgt { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+    .tgt:first-of-type { border-top: none; }
+    .tgt .body { flex: 1; min-width: 0; cursor: pointer; }
+    .stepper { display: flex; align-items: center; gap: 4px; }
+    .stepper button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: #1f293d; color: var(--text); font-size: 16px; font-weight: 800; cursor: pointer; }
+    .stepper span { min-width: 64px; text-align: center; font-weight: 800; font-size: 13px; }
+    .sug { margin-top: 5px; font-size: 11px; color: #fcd34d; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .sug button { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; font-size: 11px; font-weight: 800; padding: 2px 8px; cursor: pointer; }
+    .banner { background: var(--accent-dim); border: 1px solid rgba(245,158,11,.45); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 12px; line-height: 1.55; }
+    .banner b { color: var(--accent); }
+    .banner ul { margin: 6px 0 0 16px; }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+    .seg button { background: #1f293d; border: 1px solid var(--border); color: var(--muted); padding: 8px 4px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .seg button.on { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+    details summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted); padding: 6px 0; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::before { content: '▸ '; }
+    details[open] summary::before { content: '▾ '; }
+    nav.bottom { position: fixed; bottom: 0; left: 0; right: 0; background: #111827; border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); z-index: 50; }
+    nav.bottom button { background: none; border: none; color: var(--muted); font-size: 10px; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 10px; cursor: pointer; }
+    nav.bottom button.on { color: var(--accent); }
+    nav.bottom .ic { font-size: 20px; line-height: 1; }
+    .view { display: none; } .view.on { display: block; }
+    .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 60; display: none; }
+    .sheet-bg.on { display: block; }
+    .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 92vh; overflow-y: auto; background: var(--card); border-top-left-radius: 20px; border-top-right-radius: 20px; border-top: 1px solid var(--border); z-index: 61; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); transform: translateY(100%); visibility: hidden; max-width: 520px; margin: 0 auto; }
+    .sheet.on { transform: translateY(0); visibility: visible; transition: transform .25s; }
+    .sheet h2 { font-size: 17px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .x { background: #1f293d; border: none; color: var(--text); width: 30px; height: 30px; border-radius: 99px; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+    .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: #0f172a; border: 1px solid var(--accent); color: var(--text); padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; z-index: 80; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: 90vw; text-align: center; }
+    .toast.on { opacity: 1; }
+    .empty { text-align: center; color: var(--muted); padding: 14px 8px; font-size: 13px; line-height: 1.5; }
+    .hist { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; }
+    .switch input { width: 44px; height: 24px; accent-color: var(--accent); flex-shrink: 0; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo"><img src="icon.svg" alt="" /> PocketPantry</div>
+  <div class="wk" id="hdrWeek"></div>
+</header>
+
+<main class="container">
+  <!-- SHOPPING LIST -->
+  <section class="view on" id="v-list">
+    <div id="changeBanner"></div>
+    <div class="card">
+      <div class="card-title"><span id="listTitle">This week's list</span><span id="listCount"></span></div>
+      <div class="prog-track"><div class="prog-fill" id="listProg" style="width:0"></div></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="shareList">📤 Share list</button>
+        <button class="btn sec" id="allGot">✓ Got everything</button>
+      </div>
+    </div>
+    <div id="listCats"></div>
+    <div class="card">
+      <div class="card-title">One-off extras this week</div>
+      <div id="extrasList"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="extraIn" placeholder="e.g. Birthday cake, braai wood" style="flex:3" />
+        <button class="btn sm" id="extraAdd">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Pantry & drinks check</div>
+      <p class="help">Long-life items only go on the list when you're running low. Tap anything you're out of.</p>
+      <div id="restockChips"></div>
+    </div>
+    <div id="coveredCard"></div>
+  </section>
+
+  <!-- STOCKTAKE -->
+  <section class="view" id="v-take">
+    <div class="card">
+      <div class="card-title"><span>End-of-week stocktake</span><span id="takeCount"></span></div>
+      <p class="help">Before you shop again, say how much of each item is <b>left and still good</b>. Pick <b>Ran out</b> if it finished before the week was over. The app uses this to work out what you really use and adjusts next week's amounts.</p>
+      <div class="prog-track"><div class="prog-fill" id="takeProg" style="width:0"></div></div>
+    </div>
+    <div id="takeCats"></div>
+    <div class="card">
+      <div class="card-title">Pantry & drinks: running low?</div>
+      <div id="takeRestock"></div>
+    </div>
+    <button class="btn" id="finishWeek">Finish week & build next list</button>
+    <p class="help" style="margin-top:8px;text-align:center">Items you skip are counted as fully used.</p>
+  </section>
+
+  <!-- TARGETS -->
+  <section class="view" id="v-targets">
+    <div id="sugCard"></div>
+    <div class="card">
+      <div class="card-title">Weekly amounts</div>
+      <p class="help">How much you want in the house at the start of each week. The list buys the difference after leftovers.</p>
+      <div class="switch"><span class="small">Adjust amounts automatically after each stocktake</span><input type="checkbox" id="autoAdj" /></div>
+      <button class="btn sec" id="addItem" style="margin-top:6px">＋ Add an item</button>
+    </div>
+    <div id="tgtCats"></div>
+  </section>
+
+  <!-- SHARE -->
+  <section class="view" id="v-share">
+    <div class="card">
+      <div class="card-title">Share with Claude</div>
+      <p class="help">1. Tap <b>Copy for Claude</b> and paste it into the Claude app. It has your amounts, leftovers and usage history.<br />2. Ask anything: plan meals around leftovers, cut waste, budget, add items.<br />3. Claude replies with a block of changes. Copy that reply, then paste it below and tap <b>Apply</b>.</p>
+      <button class="btn" id="copyClaude">📋 Copy for Claude</button>
+      <label class="f">Claude's reply</label>
+      <textarea id="claudePaste" placeholder='Paste Claude&apos;s reply here (it contains a { "pocketpantry": ... } block)'></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sec" id="pasteClip">📥 Paste</button>
+        <button class="btn" id="applyClaude">Apply changes</button>
+      </div>
+      <div id="applyResult"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Share the shopping list</div>
+      <p class="help">Send this week's list to WhatsApp, email, notes or someone else who's shopping.</p>
+      <button class="btn sec" id="shareList2">📤 Share list as text</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Week</div>
+      <label class="f">This week started on</label>
+      <input type="date" id="weekStart" />
+      <button class="btn sec" id="undoWeek" style="margin-top:10px">↩︎ Undo last "Finish week"</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Backup</div>
+      <p class="help">Your data is stored on this phone only. Save a backup now and then, or to move to a new phone.</p>
+      <div class="row">
+        <button class="btn sec" id="exportBtn">💾 Save backup</button>
+        <button class="btn sec" id="importBtn">📂 Restore</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none" />
+      <button class="btn danger" id="resetBtn" style="margin-top:10px">Start over from the original list</button>
+    </div>
+  </section>
+</main>
+
+<nav class="bottom">
+  <button data-v="list" class="on"><span class="ic">🛒</span>List</button>
+  <button data-v="take"><span class="ic">📦</span>Stocktake</button>
+  <button data-v="targets"><span class="ic">🎯</span>Amounts</button>
+  <button data-v="share"><span class="ic">💬</span>Share</button>
+</nav>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script src="starter-list.js"></script>
+<script>
+'use strict';
+const KEY = 'pocketpantry.v1';
+const CATS = ['Protein', 'Dairy', 'Vegetables', 'Carbohydrates', 'Fruit', 'Sweet snacks', 'Sauces & pantry', 'Drinks & alcohol', 'Other'];
+const ICON = { Protein: '🍗', Dairy: '🧀', Vegetables: '🥦', Carbohydrates: '🍞', Fruit: '🍌', 'Sweet snacks': '🍫', 'Sauces & pantry': '🧂', 'Drinks & alcohol': '🍸', Other: '🛍️' };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const r3 = (x) => Math.round(x * 1000) / 1000;
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const fmtDate = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' });
+
+// ---------- state ----------
+function freshState() {
+  const items = STARTER.map((x, i) => ({
+    id: 'i' + i, name: x.name, cat: x.cat, kind: x.kind || 'weekly',
+    qty: x.qty ?? null, unit: x.unit ?? '', step: x.step ?? 1, note: x.note || '', base: x.qty ?? null,
+  }));
+  return { v: 1, items, nextId: items.length, auto: true,
+    week: { start: todayISO(), got: {}, skip: {}, override: {} },
+    stock: {}, low: {}, take: {}, extras: [], history: [], changes: [], prev: null };
+}
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.items) return s; } catch {}
+  return freshState();
+}
+let S = load();
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { toast('Could not save on this phone'); } }
+const byId = (id) => S.items.find((i) => i.id === id);
+const byName = (name) => { const n = String(name || '').trim().toLowerCase(); return S.items.find((i) => i.name.toLowerCase() === n) || S.items.find((i) => i.name.toLowerCase().includes(n) && n.length > 3); };
+
+// ---------- quantities ----------
+function fmtQ(q, unit) {
+  if (q == null) return '';
+  const n = Number.isInteger(q) ? String(q) : String(r3(q)).replace(/^0\./, '0.');
+  return unit ? `${n} ${unit}` : n;
+}
+function roundStep(x, step, mode) {
+  const f = mode === 'up' ? Math.ceil : mode === 'down' ? Math.floor : Math.round;
+  return r3(f(r3(x / step)) * step);
+}
+// What to buy: target minus what's left, only if short by more than a quarter step.
+function needFor(it) {
+  if (it.kind === 'restock') return S.low[it.id] ? 1 : 0;
+  if (S.week.override[it.id] != null) return S.week.override[it.id];
+  const short = (it.qty || 0) - (S.stock[it.id] || 0);
+  if (short <= it.step * 0.25) return 0;
+  return r3(Math.ceil(r3(short / it.step) - 0.25) * it.step);
+}
+const onList = (it) => !S.week.skip[it.id] && needFor(it) > 0;
+const available = (it) => r3((S.stock[it.id] || 0) + (S.week.got[it.id] || 0));
+
+// ---------- adaptive targets ----------
+function recentRecs(id, n = 3) {
+  const out = [];
+  for (let i = S.history.length - 1; i >= 0 && out.length < n; i--) {
+    const r = S.history[i].items[id];
+    if (r && r.avail > 0) out.unshift(r);
+  }
+  return out;
+}
+function suggest(it) {
+  if (it.kind !== 'weekly' || !it.qty) return null;
+  const recs = recentRecs(it.id);
+  if (!recs.length) return null;
+  const t = it.qty, step = it.step, last = recs[recs.length - 1];
+  let to = null, why = '';
+  if (last.out) {
+    to = Math.max(r3(t + step), roundStep(t * 1.2, step, 'up'));
+    why = recs.filter((r) => r.out).length > 1 ? `ran out early ${recs.filter((r) => r.out).length} weeks` : 'ran out before the week ended';
+  } else {
+    const avgUsed = recs.reduce((a, r) => a + r.used, 0) / recs.length;
+    const leftover = (r) => r.left >= Math.max(r.avail * 0.25, step * 0.5);
+    const lastTwo = recs.slice(-2);
+    const bigLeft = last.left >= last.avail * 0.5;
+    if ((lastTwo.length === 2 && lastTwo.every(leftover)) || bigLeft) {
+      // Aim for what you use plus 10%; with only one week of data, move halfway there.
+      const aim = avgUsed * 1.1;
+      to = Math.max(step, roundStep(recs.length > 1 ? aim : (t + aim) / 2, step, 'round'));
+      why = `you use about ${fmtQ(Math.round(avgUsed * 100) / 100, it.unit)} a week` + (recs.length > 1 ? ` (last ${recs.length} weeks)` : '');
+    }
+  }
+  if (to == null || Math.abs(to - t) < step * 0.99) return null;
+  return { to, why };
+}
+
+// ---------- rendering ----------
+let view = 'list';
+function render() {
+  $('hdrWeek').innerHTML = `Week of<br>${esc(fmtDate(S.week.start))}`;
+  if (view === 'list') renderList();
+  if (view === 'take') renderTake();
+  if (view === 'targets') renderTargets();
+  if (view === 'share') renderShare();
+}
+function groupByCat(items) {
+  const g = {};
+  items.forEach((it) => { const c = CATS.includes(it.cat) ? it.cat : 'Other'; (g[c] = g[c] || []).push(it); });
+  return CATS.filter((c) => g[c]).map((c) => [c, g[c]]);
+}
+
+function renderList() {
+  const items = S.items.filter(onList);
+  const got = items.filter((it) => S.week.got[it.id] != null).length + S.extras.filter((e) => e.done).length;
+  const total = items.length + S.extras.length;
+  $('listTitle').textContent = `List for week of ${fmtDate(S.week.start)}`;
+  $('listCount').textContent = `${got} of ${total} in trolley`;
+  $('listProg').style.width = total ? `${(got / total) * 100}%` : '0';
+
+  // banner with last auto-changes
+  if (S.changes && S.changes.length) {
+    $('changeBanner').innerHTML = `<div class="banner"><div class="row" style="align-items:flex-start"><div style="flex:5"><b>Adjusted from your stocktake</b><ul>${S.changes.map((c) => `<li>${esc(byId(c.id)?.name || c.name)}: ${esc(fmtQ(c.from, c.unit))} → <b>${esc(fmtQ(c.to, c.unit))}</b> <span class="muted">(${esc(c.why)})</span></li>`).join('')}</ul></div><button class="x" id="dismissBanner" title="Dismiss">✕</button></div></div>`;
+    $('dismissBanner').onclick = () => { S.changes = []; save(); render(); };
+  } else $('changeBanner').innerHTML = '';
+
+  $('listCats').innerHTML = items.length ? groupByCat(items).map(([cat, its]) => {
+    const left = its.filter((it) => S.week.got[it.id] == null).length;
+    return `<div class="card"><div class="card-title"><span>${ICON[cat]} ${esc(cat)}</span><span>${left ? left + ' to get' : '✓ done'}</span></div>
+      ${its.map((it) => {
+        const need = needFor(it), has = S.stock[it.id] || 0, g = S.week.got[it.id];
+        const sub = [it.note, has && it.kind === 'weekly' ? `have ${fmtQ(has, it.unit)} left` : '', it.kind === 'restock' ? 'running low' : ''].filter(Boolean).join(' · ');
+        const qtxt = it.kind === 'restock' ? '' : fmtQ(g != null ? g : need, it.unit);
+        return `<div class="item ${g != null ? 'got' : ''}" data-id="${it.id}">
+          <div class="tick" data-act="tick">${g != null ? '✓' : ''}</div>
+          <div class="body" data-act="tick"><div class="n">${esc(it.name)}</div>${sub ? `<div class="d">${esc(sub)}</div>` : ''}</div>
+          <div class="q" data-act="more">${esc(qtxt)}${g != null && it.kind === 'weekly' && g !== need ? `<small>planned ${esc(fmtQ(need, it.unit))}</small>` : ''}</div>
+          <button class="more" data-act="more" aria-label="Options">⋯</button></div>`;
+      }).join('')}</div>`;
+  }).join('') : `<div class="card"><div class="empty">Nothing to buy — leftovers cover everything this week. 🎉</div></div>`;
+
+  $('extrasList').innerHTML = S.extras.length ? S.extras.map((e, i) => `<div class="item ${e.done ? 'got' : ''}" data-ex="${i}"><div class="tick" data-act="extick">${e.done ? '✓' : ''}</div><div class="body" data-act="extick"><div class="n">${esc(e.name)}</div></div><button class="more" data-act="exdel" aria-label="Remove">✕</button></div>`).join('') : '<div class="tiny muted">Nothing extra.</div>';
+
+  const rs = S.items.filter((it) => it.kind === 'restock');
+  $('restockChips').innerHTML = groupByCat(rs).map(([cat, its]) => `<div class="tiny muted" style="margin:8px 0 5px">${ICON[cat]} ${esc(cat)}</div><div class="chips">${its.map((it) => `<button class="chip ${S.low[it.id] ? 'on' : ''}" data-low="${it.id}">${S.low[it.id] ? '✓ ' : ''}${esc(it.name)}</button>`).join('')}</div>`).join('');
+
+  const covered = S.items.filter((it) => it.kind === 'weekly' && it.qty && !onList(it));
+  $('coveredCard').innerHTML = covered.length ? `<div class="card"><details><summary>Not on the list this week (${covered.length})</summary>${covered.map((it) => `<div class="item" data-id="${it.id}"><div class="body" data-act="more"><div class="n">${esc(it.name)}</div><div class="d">${S.week.skip[it.id] ? 'skipped this week' : `have ${esc(fmtQ(S.stock[it.id] || 0, it.unit))} of ${esc(fmtQ(it.qty, it.unit))}`}</div></div><button class="btn sm sec" data-act="${S.week.skip[it.id] ? 'unskip' : 'more'}">${S.week.skip[it.id] ? 'Put back' : 'Buy anyway'}</button></div>`).join('')}</details></div>` : '';
+}
+
+function renderTake() {
+  const items = S.items.filter((it) => it.kind === 'weekly' && (available(it) > 0 || S.take[it.id]));
+  const done = items.filter((it) => S.take[it.id]).length;
+  $('takeCount').textContent = `${done} of ${items.length} counted`;
+  $('takeProg').style.width = items.length ? `${(done / items.length) * 100}%` : '0';
+  $('takeCats').innerHTML = items.length ? groupByCat(items).map(([cat, its]) => `<div class="card"><div class="card-title"><span>${ICON[cat]} ${esc(cat)}</span></div>
+    ${its.map((it) => {
+      const av = available(it), t = S.take[it.id];
+      const fr = [['None', 0], ['¼', 0.25], ['½', 0.5], ['¾', 0.75], ['All', 1]];
+      return `<div class="take ${t ? 'done' : ''}" data-id="${it.id}"><div class="top"><span class="n">${esc(it.name)}</span><span class="had">had ${esc(fmtQ(av, it.unit))}</span></div>
+        <div class="chips"><button class="chip out ${t && t.out ? 'on' : ''}" data-left="out">Ran out</button>
+        ${fr.map(([l, f]) => { const v = r3(av * f); return `<button class="chip ${t && !t.out && Math.abs(t.left - v) < 1e-6 ? 'on' : ''}" data-left="${v}">${l}</button>`; }).join('')}
+        <input class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="${esc(it.unit || 'left')}" value="${t && !t.out && !fr.some(([, f]) => Math.abs(t.left - r3(av * f)) < 1e-6) ? t.left : ''}" data-num="1" /></div></div>`;
+    }).join('')}</div>`).join('') : `<div class="card"><div class="empty">Nothing bought yet this week. Tick items on the List as you shop, then come back here at the end of the week.</div></div>`;
+
+  const rs = S.items.filter((it) => it.kind === 'restock');
+  $('takeRestock').innerHTML = `<p class="help">Tap anything that's nearly finished — it goes on next week's list.</p>` + groupByCat(rs).map(([cat, its]) => `<div class="tiny muted" style="margin:8px 0 5px">${ICON[cat]} ${esc(cat)}</div><div class="chips">${its.map((it) => `<button class="chip ${S.low[it.id] && S.week.got[it.id] == null ? 'on' : ''}" data-low="${it.id}">${esc(it.name)}</button>`).join('')}</div>`).join('');
+}
+
+function renderTargets() {
+  $('autoAdj').checked = !!S.auto;
+  const sugs = S.items.map((it) => [it, suggest(it)]).filter(([, s]) => s);
+  $('sugCard').innerHTML = sugs.length && !S.auto ? `<div class="banner"><b>${sugs.length} suggested change${sugs.length > 1 ? 's' : ''}</b> based on your stocktakes. <button class="btn sm" id="applyAll" style="margin-left:6px">Apply all</button></div>` : '';
+  if ($('applyAll')) $('applyAll').onclick = () => { sugs.forEach(([it, s]) => setQty(it, s.to)); save(); render(); toast('Suggestions applied'); };
+  $('tgtCats').innerHTML = groupByCat(S.items).map(([cat, its]) => `<div class="card"><div class="card-title"><span>${ICON[cat]} ${esc(cat)}</span><span>${its.length}</span></div>
+    ${its.map((it) => {
+      const s = suggest(it), recs = recentRecs(it.id, 4);
+      const hist = recs.length ? 'Used: ' + recs.map((r) => (r.out ? '🔴' : '') + fmtQ(r3(r.used), '')).join(' · ') + ' ' + it.unit : '';
+      const changed = it.kind === 'weekly' && it.base != null && it.qty !== it.base;
+      return `<div class="tgt" data-id="${it.id}"><div class="body" data-act="edit"><div class="n" style="font-weight:600">${esc(it.name)}</div>
+        <div class="hist">${it.kind === 'restock' ? 'Buy when low' : [it.note, changed ? `started at ${fmtQ(it.base, it.unit)}` : '', hist].filter(Boolean).map(esc).join(' · ')}</div>
+        ${s && !S.auto ? `<div class="sug">Suggest ${esc(fmtQ(s.to, it.unit))} — ${esc(s.why)} <button data-act="apply" data-to="${s.to}">Apply</button></div>` : ''}</div>
+        ${it.kind === 'weekly' ? `<div class="stepper"><button data-act="dec">−</button><span>${esc(fmtQ(it.qty, it.unit))}</span><button data-act="inc">+</button></div>` : `<span class="badge blue">restock</span>`}</div>`;
+    }).join('')}</div>`).join('');
+}
+
+function renderShare() {
+  $('weekStart').value = S.week.start;
+  $('undoWeek').disabled = !S.prev;
+}
+
+// ---------- actions ----------
+function setQty(it, q) { it.qty = Math.max(0, r3(q)); }
+function toggleGot(it) {
+  if (S.week.got[it.id] != null) delete S.week.got[it.id];
+  else S.week.got[it.id] = it.kind === 'restock' ? 1 : needFor(it);
+  save(); render();
+}
+
+function openSheet(html) { $('sheet').innerHTML = html; $('sheet').classList.add('on'); $('sheetBg').classList.add('on'); }
+function closeSheet() { $('sheet').classList.remove('on'); $('sheetBg').classList.remove('on'); }
+$('sheetBg').onclick = closeSheet;
+
+function itemOptions(it) {
+  const need = needFor(it), g = S.week.got[it.id];
+  openSheet(`<h2><span>${esc(it.name)}</span><button class="x" id="sx">✕</button></h2>
+    ${it.kind === 'weekly' ? `<p class="help">Weekly amount ${esc(fmtQ(it.qty, it.unit))} · have ${esc(fmtQ(S.stock[it.id] || 0, it.unit))} left · list says ${esc(fmtQ(need, it.unit))}</p>
+    <label class="f">${g != null ? 'Amount you bought' : 'Amount to buy this week'} (${esc(it.unit || 'count')})</label>
+    <input id="optQ" type="number" inputmode="decimal" step="any" min="0" value="${g != null ? g : need}" />
+    <div class="row" style="margin-top:10px"><button class="btn" id="optSave">Save</button>${g == null ? `<button class="btn sec" id="optGot">Bought this</button>` : ''}</div>` : ''}
+    <div class="stack" style="margin-top:10px">
+      ${!S.week.skip[it.id] ? `<button class="btn sec" id="optSkip">Skip this week</button>` : `<button class="btn sec" id="optUnskip">Put back on list</button>`}
+      <button class="btn sec" id="optEdit">Edit item</button></div>`);
+  $('sx').onclick = closeSheet;
+  const q = () => Math.max(0, parseFloat($('optQ').value) || 0);
+  if ($('optSave')) $('optSave').onclick = () => {
+    if (g != null) S.week.got[it.id] = q(); else { S.week.override[it.id] = q(); delete S.week.skip[it.id]; }
+    save(); closeSheet(); render();
+  };
+  if ($('optGot')) $('optGot').onclick = () => { S.week.override[it.id] = q(); S.week.got[it.id] = q(); delete S.week.skip[it.id]; save(); closeSheet(); render(); };
+  if ($('optSkip')) $('optSkip').onclick = () => { S.week.skip[it.id] = true; delete S.week.got[it.id]; save(); closeSheet(); render(); };
+  if ($('optUnskip')) $('optUnskip').onclick = () => { delete S.week.skip[it.id]; save(); closeSheet(); render(); };
+  $('optEdit').onclick = () => editItem(it);
+}
+
+function editItem(it) {
+  const isNew = !it;
+  it = it || { name: '', cat: 'Other', kind: 'weekly', qty: 1, unit: '', step: 1, note: '' };
+  openSheet(`<h2><span>${isNew ? 'Add item' : 'Edit item'}</span><button class="x" id="sx">✕</button></h2>
+    <label class="f">Name</label><input id="eName" value="${esc(it.name)}" />
+    <label class="f">Category</label><select id="eCat">${CATS.map((c) => `<option ${c === it.cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+    <label class="f">Type</label><select id="eKind"><option value="weekly" ${it.kind === 'weekly' ? 'selected' : ''}>Weekly amount</option><option value="restock" ${it.kind === 'restock' ? 'selected' : ''}>Long-life — buy when low</option></select>
+    <div id="eWeekly"><div class="row"><div><label class="f">Weekly amount</label><input id="eQty" type="number" inputmode="decimal" step="any" min="0" value="${it.qty ?? 1}" /></div>
+    <div><label class="f">Unit</label><input id="eUnit" value="${esc(it.unit)}" placeholder="kg, g, tins…" /></div>
+    <div><label class="f">Step</label><input id="eStep" type="number" inputmode="decimal" step="any" min="0" value="${it.step ?? 1}" /></div></div></div>
+    <label class="f">Note</label><input id="eNote" value="${esc(it.note)}" placeholder="optional" />
+    <button class="btn" id="eSave" style="margin-top:14px">Save</button>
+    ${!isNew ? `<button class="btn danger" id="eDel" style="margin-top:8px">Delete item</button>` : ''}`);
+  $('sx').onclick = closeSheet;
+  const sync = () => { $('eWeekly').style.display = $('eKind').value === 'weekly' ? '' : 'none'; };
+  $('eKind').onchange = sync; sync();
+  $('eSave').onclick = () => {
+    const name = $('eName').value.trim();
+    if (!name) return toast('Give it a name');
+    const kind = $('eKind').value;
+    const data = { name, cat: $('eCat').value, kind, note: $('eNote').value.trim(),
+      qty: kind === 'weekly' ? Math.max(0, parseFloat($('eQty').value) || 0) : null,
+      unit: kind === 'weekly' ? $('eUnit').value.trim() : '',
+      step: kind === 'weekly' ? (parseFloat($('eStep').value) || 1) : 1 };
+    if (isNew) S.items.push({ id: 'i' + S.nextId++, base: data.qty, ...data }); else Object.assign(it, data);
+    save(); closeSheet(); render(); toast(isNew ? 'Added' : 'Saved');
+  };
+  if ($('eDel')) $('eDel').onclick = () => {
+    if (!confirm(`Delete ${it.name}?`)) return;
+    S.items = S.items.filter((x) => x !== it); save(); closeSheet(); render();
+  };
+}
+
+// event delegation
+document.addEventListener('click', (e) => {
+  const lowBtn = e.target.closest('[data-low]');
+  if (lowBtn) { const id = lowBtn.dataset.low; if (S.low[id]) { delete S.low[id]; delete S.week.got[id]; } else S.low[id] = true; save(); render(); return; }
+  const act = e.target.closest('[data-act]');
+  if (act) {
+    const row = act.closest('[data-id]'), it = row && byId(row.dataset.id);
+    const a = act.dataset.act;
+    if (it) {
+      if (a === 'tick') return toggleGot(it);
+      if (a === 'more') return itemOptions(it);
+      if (a === 'unskip') { delete S.week.skip[it.id]; save(); return render(); }
+      if (a === 'edit') return editItem(it);
+      if (a === 'inc') { setQty(it, (it.qty || 0) + it.step); save(); return render(); }
+      if (a === 'dec') { setQty(it, (it.qty || 0) - it.step); save(); return render(); }
+      if (a === 'apply') { setQty(it, parseFloat(act.dataset.to)); save(); toast('Updated'); return render(); }
+    }
+    const ex = act.closest('[data-ex]');
+    if (ex) {
+      const i = +ex.dataset.ex;
+      if (a === 'extick') S.extras[i].done = !S.extras[i].done;
+      if (a === 'exdel') S.extras.splice(i, 1);
+      save(); return render();
+    }
+  }
+  const leftBtn = e.target.closest('[data-left]');
+  if (leftBtn) {
+    const id = leftBtn.closest('[data-id]').dataset.id, v = leftBtn.dataset.left;
+    S.take[id] = v === 'out' ? { left: 0, out: true } : { left: parseFloat(v), out: false };
+    save(); render(); return;
+  }
+});
+document.addEventListener('change', (e) => {
+  if (e.target.dataset.num) {
+    const id = e.target.closest('[data-id]').dataset.id, v = parseFloat(e.target.value);
+    if (isNaN(v)) delete S.take[id]; else S.take[id] = { left: Math.max(0, v), out: false };
+    save(); render();
+  }
+});
+
+document.querySelectorAll('nav.bottom button').forEach((b) => b.onclick = () => {
+  view = b.dataset.v;
+  document.querySelectorAll('nav.bottom button').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + view));
+  window.scrollTo(0, 0); render();
+});
+
+$('allGot').onclick = () => {
+  S.items.filter(onList).forEach((it) => { if (S.week.got[it.id] == null) S.week.got[it.id] = it.kind === 'restock' ? 1 : needFor(it); });
+  S.extras.forEach((x) => x.done = true);
+  save(); render(); toast('Everything ticked');
+};
+$('extraAdd').onclick = () => { const v = $('extraIn').value.trim(); if (!v) return; S.extras.push({ name: v, done: false }); $('extraIn').value = ''; save(); render(); };
+$('extraIn').onkeydown = (e) => { if (e.key === 'Enter') $('extraAdd').click(); };
+$('autoAdj').onchange = (e) => { S.auto = e.target.checked; save(); render(); };
+$('addItem').onclick = () => editItem(null);
+$('weekStart').onchange = (e) => { if (e.target.value) { S.week.start = e.target.value; save(); render(); } };
+
+// ---------- finish week ----------
+$('finishWeek').onclick = () => {
+  const weekly = S.items.filter((it) => it.kind === 'weekly');
+  const anyGot = Object.keys(S.week.got).length > 0;
+  if (!anyGot) {
+    if (!confirm('Nothing was ticked as bought this week. Count everything on the list as bought?')) return;
+    S.items.filter(onList).forEach((it) => { S.week.got[it.id] = it.kind === 'restock' ? 1 : needFor(it); });
+  }
+  const counted = weekly.filter((it) => available(it) > 0);
+  const missing = counted.filter((it) => !S.take[it.id]).length;
+  if (missing && !confirm(`${missing} item${missing > 1 ? 's were' : ' was'} not counted. Treat ${missing > 1 ? 'them' : 'it'} as fully used?`)) return;
+
+  const { prev, ...snap } = S;
+  S.prev = JSON.parse(JSON.stringify(snap));
+  const rec = { start: S.week.start, end: todayISO(), items: {} };
+  weekly.forEach((it) => {
+    const av = available(it);
+    const t = S.take[it.id];
+    if (av <= 0 && !t) { S.stock[it.id] = 0; return; }
+    const left = t ? t.left : 0;
+    const realAvail = Math.max(av, left);
+    rec.items[it.id] = { avail: realAvail, left, used: r3(realAvail - left), out: !!(t && t.out), target: it.qty };
+    S.stock[it.id] = left;
+  });
+  S.history.push(rec);
+  if (S.history.length > 52) S.history.shift();
+  S.items.filter((it) => it.kind === 'restock' && S.week.got[it.id] != null).forEach((it) => delete S.low[it.id]);
+
+  const changes = [];
+  weekly.forEach((it) => { const s = suggest(it); if (s) changes.push({ id: it.id, name: it.name, unit: it.unit, from: it.qty, to: s.to, why: s.why }); });
+  if (S.auto) { changes.forEach((c) => setQty(byId(c.id), c.to)); S.changes = changes; } else S.changes = [];
+
+  S.extras = S.extras.filter((x) => !x.done);
+  S.week = { start: todayISO(), got: {}, skip: {}, override: {} };
+  S.take = {};
+  save();
+  document.querySelector('nav.bottom button[data-v="list"]').click();
+  toast(S.auto && changes.length ? `New list ready · ${changes.length} amount${changes.length > 1 ? 's' : ''} adjusted` : (!S.auto && changes.length ? `New list ready · ${changes.length} suggestion${changes.length > 1 ? 's' : ''} under Amounts` : 'New list ready'));
+};
+$('undoWeek').onclick = () => {
+  if (!S.prev || !confirm('Go back to before you last tapped "Finish week"?')) return;
+  S = { ...S.prev, prev: null }; save(); render(); toast('Undone');
+};
+
+// ---------- share ----------
+function listText() {
+  const lines = [`🛒 Shopping list – week of ${fmtDate(S.week.start)}`];
+  groupByCat(S.items.filter(onList)).forEach(([cat, its]) => {
+    lines.push('', `${ICON[cat]} ${cat.toUpperCase()}`);
+    its.forEach((it) => lines.push(`${S.week.got[it.id] != null ? '☑' : '☐'} ${it.name}${it.kind === 'weekly' ? ' – ' + fmtQ(needFor(it), it.unit) : ''}`));
+  });
+  if (S.extras.length) { lines.push('', '➕ EXTRAS'); S.extras.forEach((x) => lines.push(`${x.done ? '☑' : '☐'} ${x.name}`)); }
+  return lines.join('\n');
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch {} ta.remove(); return ok;
+}
+async function shareList() {
+  const text = listText();
+  if (navigator.share) { try { await navigator.share({ title: 'Shopping list', text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  toast((await copyText(text)) ? 'List copied — paste it anywhere' : 'Could not copy');
+}
+$('shareList').onclick = shareList;
+$('shareList2').onclick = shareList;
+
+function claudeText() {
+  const L = [];
+  L.push('Hi Claude — this is my PocketPantry weekly shopping & usage tracker. Please look at what I actually use and help me adjust my weekly amounts, cut waste, and plan meals around leftovers.');
+  L.push('', `Current week started: ${S.week.start}. Weeks of history: ${S.history.length}.`);
+  L.push('', 'WEEKLY ITEMS — target per week | left over now | recent weeks (used / had, 🔴 = ran out early)');
+  groupByCat(S.items.filter((i) => i.kind === 'weekly')).forEach(([cat, its]) => {
+    L.push(`[${cat}]`);
+    its.forEach((it) => {
+      const recs = recentRecs(it.id, 4);
+      const h = recs.map((r) => `${r.out ? '🔴' : ''}${fmtQ(r.used, '')}/${fmtQ(r.avail, '')}`).join(', ');
+      L.push(`- ${it.name}: ${fmtQ(it.qty, it.unit)}${it.note ? ` (${it.note})` : ''} | left ${fmtQ(S.stock[it.id] || 0, it.unit)}${h ? ` | ${h}` : ''}`);
+    });
+  });
+  const low = S.items.filter((i) => i.kind === 'restock' && S.low[i.id]).map((i) => i.name);
+  L.push('', `PANTRY/DRINKS (buy when low): ${S.items.filter((i) => i.kind === 'restock').map((i) => i.name).join('; ')}`);
+  L.push(`Running low now: ${low.length ? low.join('; ') : 'nothing'}`);
+  if (S.extras.length) L.push(`One-off extras this week: ${S.extras.map((x) => x.name).join('; ')}`);
+  L.push('', "THIS WEEK'S LIST:", listText());
+  L.push('', 'When you suggest changes, end your reply with ONE JSON block in exactly this shape (leave out any parts you don\'t need; use item names as written above) so I can paste it into the app:');
+  L.push('```json');
+  L.push(JSON.stringify({ pocketpantry: { targets: { 'Lean steak': 0.75 }, add: [{ name: 'Rocket', cat: 'Vegetables', qty: 100, unit: 'g', step: 50 }, { name: 'Peanut butter', cat: 'Sauces & pantry', kind: 'restock' }], remove: ['Item name'], low: ['Olive oil or cooking spray'], extras: ['Birthday candles'], buyThisWeek: { 'Hake fillets': 0.5 } } }, null, 1));
+  L.push('```');
+  L.push('targets = new weekly amount (in the item\'s unit). buyThisWeek = change only this week\'s list. low = put a pantry item on the list. extras = one-off items.');
+  return L.join('\n');
+}
+$('copyClaude').onclick = async () => toast((await copyText(claudeText())) ? 'Copied — paste it into the Claude app' : 'Could not copy');
+$('pasteClip').onclick = async () => {
+  try { const t = await navigator.clipboard.readText(); if (t) $('claudePaste').value = t; else toast('Clipboard is empty'); } catch { toast('Long-press the box and choose Paste'); }
+};
+
+function extractJSON(text) {
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const cands = [];
+  if (fence) cands.push(fence[1]);
+  const i = text.indexOf('{'), j = text.lastIndexOf('}');
+  if (i >= 0 && j > i) cands.push(text.slice(i, j + 1));
+  for (const c of cands) { try { const o = JSON.parse(c); return o.pocketpantry || o; } catch {} }
+  return null;
+}
+$('applyClaude').onclick = () => {
+  const d = extractJSON($('claudePaste').value || '');
+  if (!d || typeof d !== 'object') { $('applyResult').innerHTML = '<p class="help" style="color:#fda4af;margin-top:8px">Couldn\'t find the changes block. Copy Claude\'s whole reply, including the part in { }.</p>'; return; }
+  const { prev, ...snap } = S; const before = JSON.parse(JSON.stringify(snap));
+  const done = [], missed = [];
+  Object.entries(d.targets || {}).forEach(([n, q]) => { const it = byName(n); if (it && it.kind === 'weekly' && isFinite(q)) { done.push(`${it.name}: ${fmtQ(it.qty, it.unit)} → ${fmtQ(+q, it.unit)}`); setQty(it, +q); } else missed.push(n); });
+  Object.entries(d.buyThisWeek || {}).forEach(([n, q]) => { const it = byName(n); if (it && isFinite(q)) { S.week.override[it.id] = Math.max(0, +q); delete S.week.skip[it.id]; done.push(`This week: ${it.name} ${fmtQ(+q, it.unit)}`); } else missed.push(n); });
+  (d.add || []).forEach((a) => {
+    if (!a || !a.name) return;
+    if (byName(a.name) && byName(a.name).name.toLowerCase() === a.name.toLowerCase()) { missed.push(a.name + ' (already there)'); return; }
+    const kind = a.kind === 'restock' ? 'restock' : 'weekly';
+    const qty = kind === 'weekly' ? (isFinite(a.qty) ? +a.qty : 1) : null;
+    S.items.push({ id: 'i' + S.nextId++, name: String(a.name), cat: CATS.includes(a.cat) ? a.cat : 'Other', kind, qty, base: qty, unit: kind === 'weekly' ? String(a.unit || '') : '', step: kind === 'weekly' ? (+a.step > 0 ? +a.step : (qty && qty >= 100 ? 50 : 1)) : 1, note: String(a.note || '') });
+    done.push(`Added ${a.name}`);
+  });
+  (d.remove || []).forEach((n) => { const it = byName(n); if (it) { S.items = S.items.filter((x) => x !== it); done.push(`Removed ${it.name}`); } else missed.push(n); });
+  (d.low || []).forEach((n) => { const it = byName(n); if (it) { S.low[it.id] = true; done.push(`Low: ${it.name}`); } else missed.push(n); });
+  (d.extras || []).forEach((n) => { if (n) { S.extras.push({ name: String(n), done: false }); done.push(`Extra: ${n}`); } });
+  if (!done.length) { $('applyResult').innerHTML = `<p class="help" style="margin-top:8px">No changes applied.${missed.length ? ' Not found: ' + esc(missed.join(', ')) : ''}</p>`; return; }
+  S.prev = before; save(); render();
+  $('claudePaste').value = '';
+  $('applyResult').innerHTML = `<div class="banner" style="margin:10px 0 0"><b>Applied ${done.length} change${done.length > 1 ? 's' : ''}</b><ul>${done.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${missed.length ? `<div class="muted" style="margin-top:6px">Not found: ${esc(missed.join(', '))}</div>` : ''}<div class="muted" style="margin-top:6px">Changed your mind? Use Undo under Week.</div></div>`;
+};
+
+// ---------- backup ----------
+$('exportBtn').onclick = async () => {
+  const { prev, ...data } = S;
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+  const name = `pocketpantry-${todayISO()}.json`;
+  const file = new File([blob], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'PocketPantry backup' }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const d = JSON.parse(await f.text()); if (!d.items) throw 0; if (!confirm('Replace everything on this phone with this backup?')) return; S = { ...freshState(), ...d, prev: null }; save(); render(); toast('Backup restored'); }
+  catch { toast('That file is not a PocketPantry backup'); }
+  e.target.value = '';
+};
+$('resetBtn').onclick = () => { if (confirm('Start over? This clears your history, leftovers and changes.')) { S = freshState(); save(); render(); toast('Back to the original list'); } };
+
+let tt;
+function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2600); }
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
