@@ -128,6 +128,9 @@
     .bar-labels { display: flex; gap: 4px; font-size: 9px; color: var(--muted); margin-top: 4px; }
     .bar-labels span { flex: 1; text-align: center; }
     a { color: var(--accent); }
+    a.btn { display: inline-block; text-decoration: none; text-align: center; }
+    .step { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; margin: 10px 0 6px; line-height: 1.4; }
+    textarea { font-size: 14px; resize: vertical; font-family: ui-monospace, Menlo, monospace; }
   </style>
 </head>
 <body>
@@ -206,7 +209,9 @@
     <div class="card">
       <div class="card-title"><span>AI coach</span></div>
       <p class="small muted" style="margin-bottom:10px">Sends a summary of your last 14 days (no photos, no personal details beyond the numbers) to Claude for personalised advice on what to cut back on.</p>
-      <button class="btn sec" id="coachBtn">✨ Get personalised advice</button>
+      <button class="btn sec" id="coachCopy">💬 Copy for Claude app (free with Pro)</button>
+      <div class="tiny muted" style="margin:6px 0 10px">Copies your summary and question – paste it into the Claude app and read the advice there.</div>
+      <button class="btn sec" id="coachBtn">⚡ Get advice here (API key)</button>
       <div id="coachOut" style="margin-top:12px"></div>
     </div>
   </section>
@@ -297,15 +302,32 @@
     <div id="barcodeResult" style="margin-top:10px"></div>
   </div>
   <div data-pane="photo" style="display:none">
-    <p class="small muted">Take a photo of your plate, drink or a nutrition label. Claude estimates what's on it and the calories – you can adjust before adding.</p>
-    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" />
-    <div class="row" style="margin-top:10px">
-      <button class="btn" id="takePhoto">📷 Take photo</button>
-      <button class="btn sec" id="pickPhoto">🖼️ Gallery</button>
+    <div class="tabs" id="photoModes" style="grid-template-columns:1fr 1fr">
+      <button data-pmode="app">💬 Claude app (free with Pro)</button>
+      <button data-pmode="api">⚡ Direct (API key)</button>
     </div>
-    <input id="photoHint" type="text" placeholder="Optional note, e.g. 'half portion', 'cooked in oil'" style="margin-top:10px" />
-    <img id="photoPrev" class="photo-prev" style="display:none" alt="" />
-    <div id="photoResult"></div>
+    <div id="pmode-app">
+      <p class="small muted">Uses your Claude Pro app – no API key, no extra cost.</p>
+      <div class="step"><b>1.</b> Copy the question <button class="btn sm" id="copyPhotoPrompt">📋 Copy question</button></div>
+      <div class="step"><b>2.</b> Open the Claude app, attach your food photo, paste the question and send. <a class="btn sm sec" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude ↗</a></div>
+      <div class="step"><b>3.</b> Copy Claude's whole reply and paste it here:</div>
+      <textarea id="claudePaste" rows="4" placeholder='Paste Claude&#39;s reply here (it starts with {"items"…)'></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sec" id="pasteClipboard">📥 Paste from clipboard</button>
+        <button class="btn" id="readPaste">Read reply</button>
+      </div>
+    </div>
+    <div id="pmode-api" style="display:none">
+      <p class="small muted">Take a photo of your plate, drink or a nutrition label. Claude estimates what's on it and the calories – you can adjust before adding. Needs an API key (Profile), billed per photo.</p>
+      <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" />
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="takePhoto">📷 Take photo</button>
+        <button class="btn sec" id="pickPhoto">🖼️ Gallery</button>
+      </div>
+      <input id="photoHint" type="text" placeholder="Optional note, e.g. 'half portion', 'cooked in oil'" style="margin-top:10px" />
+      <img id="photoPrev" class="photo-prev" style="display:none" alt="" />
+    </div>
+    <div id="photoResult" style="margin-top:10px"></div>
   </div>
   <div data-pane="quick" style="display:none">
     <label class="f">Name</label><input id="qName" placeholder="e.g. Mom's stew" />
@@ -796,6 +818,44 @@
       out.innerHTML = `<div class="insight bad"><div class="ico">⚠️</div><div><p>${esc(err.message)}</p></div></div>`;
     }
   }
+  const PHOTO_PROMPT = `Look at the food/drink photo I've attached. I live in South Africa and I'm tracking calories to lose weight.
+Identify each separate food or drink and estimate the portion actually shown, with calories and macros for that portion. Be realistic about hidden oil, butter, sugar and sauces. If the photo shows a nutrition label, use the values for one serving.
+
+Reply with ONLY this JSON (no other text), so I can paste it into my tracker app:
+{"items":[{"name":"","portion":"","grams":0,"kcal":0,"protein_g":0,"carbs_g":0,"fat_g":0,"sugar_g":0,"tags":[]}],"notes":""}
+
+For "tags" use any that apply from: ${Object.keys(TAG_INFO).join(', ')}. Put any assumptions in "notes" (one short sentence).`;
+  function parseClaudeReply(text) {
+    const t = String(text || '').replace(/```(?:json)?/gi, '');
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a < 0 || b <= a) throw new Error("I couldn't find the food data in that text. Make sure you copied Claude's whole reply.");
+    let d;
+    try { d = JSON.parse(t.slice(a, b + 1)); } catch { throw new Error("That reply isn't in the expected format. Ask Claude: \"Please reply with only the JSON\" and copy it again."); }
+    const items = Array.isArray(d) ? d : d.items;
+    if (!Array.isArray(items) || !items.length) throw new Error('No food items found in that reply.');
+    return {
+      notes: typeof d.notes === 'string' ? d.notes : '',
+      items: items.filter((i) => i && i.name).map((i) => ({
+        name: String(i.name).slice(0, 80), portion: String(i.portion || '1 portion').slice(0, 60), grams: num(i.grams),
+        kcal: num(i.kcal ?? i.calories), protein_g: num(i.protein_g ?? i.protein), carbs_g: num(i.carbs_g ?? i.carbs), fat_g: num(i.fat_g ?? i.fat), sugar_g: num(i.sugar_g ?? i.sugar),
+        tags: (Array.isArray(i.tags) ? i.tags : []).filter((g) => TAG_INFO[g]), on: true,
+      })),
+    };
+  }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch {}
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch {}
+    ta.remove(); return ok;
+  }
+  let photoMode = null;
+  function setPhotoMode(m) {
+    photoMode = m;
+    document.querySelectorAll('#photoModes button').forEach((b) => b.classList.toggle('on', b.dataset.pmode === m));
+    $('pmode-app').style.display = m === 'app' ? '' : 'none';
+    $('pmode-api').style.display = m === 'api' ? '' : 'none';
+  }
   function renderAiItems(notes) {
     const out = $('photoResult');
     if (!aiItems.length) { out.innerHTML = '<div class="empty">No food recognised. Try a clearer photo or use Search.</div>'; return; }
@@ -817,21 +877,24 @@
     const el = $('aiTotal'); if (el) el.textContent = `Total: ${r0(t)} kcal`;
   }
 
-  async function runCoach() {
-    const out = $('coachOut');
-    const a = analyse();
-    if (a.n < 3) { out.innerHTML = '<div class="empty">Log at least 3 days first.</div>'; return; }
-    out.innerHTML = '<div class="spinner"></div>';
+  function coachSummary(a) {
     const pl = plan();
     const foods = {};
     a.all.forEach((e) => { const f = foods[e.name] = foods[e.name] || { times: 0, kcal: 0, tags: e.tags, late: 0 }; f.times++; f.kcal += e.kcal; if (e.time >= '20:30') f.late++; });
-    const summary = {
+    return {
       profile: S.profile ? { sex: S.profile.sex, age: S.profile.age, height_cm: S.profile.height, current_kg: currentWeight(), goal_kg: S.profile.goal, days_to_target: pl?.daysLeft } : null,
       daily_target_kcal: a.target, protein_target_g: pl?.protein,
       days_logged: a.n,
       daily_totals: a.dayTotals.map((d) => ({ date: d.d, weekday: parseKey(d.d).toLocaleDateString('en-ZA', { weekday: 'short' }), kcal: r0(d.kcal), protein: r0(d.p), sugar: r0(d.s) })),
       foods: Object.entries(foods).sort((x, y) => y[1].kcal - x[1].kcal).slice(0, 40).map(([n, v]) => ({ name: n, times: v.times, total_kcal: r0(v.kcal), tags: v.tags, eaten_after_2030: v.late })),
     };
+  }
+  async function runCoach() {
+    const out = $('coachOut');
+    const a = analyse();
+    if (a.n < 3) { out.innerHTML = '<div class="empty">Log at least 3 days first.</div>'; return; }
+    out.innerHTML = '<div class="spinner"></div>';
+    const summary = coachSummary(a);
     try {
       const data = await callClaude({
         system: 'You are a supportive, practical weight-loss coach for someone in South Africa. Base everything on their actual logged data. Be specific: name their foods and drinks, quantify the calories saved, and suggest realistic South African swaps available at local shops (Checkers, Pick n Pay, Woolworths, Spar) or easy home meals. No medical claims; suggest seeing a doctor/dietitian only if something looks concerning.',
@@ -985,6 +1048,7 @@
     document.querySelectorAll('#addSheet [data-pane]').forEach((p) => { p.style.display = p.dataset.pane === t ? '' : 'none'; });
     if (t === 'barcode') { lastCode = ''; $('barcodeResult').innerHTML = ''; startScan(); } else stopScan();
     if (t === 'quick') renderQuickTags();
+    if (t === 'photo') setPhotoMode(photoMode || (S.settings.apiKey ? 'api' : 'app'));
   }
   let searchList = [];
   function renderSearch(list, isDefault, online) {
@@ -1100,7 +1164,7 @@
       const sel = aiItems.filter((i) => i.on);
       if (!sel.length) return toast('Nothing selected');
       sel.forEach((i) => addEntry({ name: i.name, serving: i.portion || '1 portion', grams: i.grams, kcal: num(i.kcal), p: num(i.protein_g), c: num(i.carbs_g), f: num(i.fat_g), s: num(i.sugar_g), tags: i.tags || [], src: 'ai' }, 1, curMeal, curDay));
-      aiItems = []; $('photoResult').innerHTML = ''; $('photoPrev').style.display = 'none'; $('photoHint').value = '';
+      aiItems = []; $('photoResult').innerHTML = ''; $('photoPrev').style.display = 'none'; $('photoHint').value = ''; $('claudePaste').value = '';
       toast(`Added ${sel.length} item${sel.length > 1 ? 's' : ''}`); closeSheet();
     }
   });
@@ -1165,6 +1229,22 @@
   $('saveProfile').addEventListener('click', saveProfile);
   $('saveKey').addEventListener('click', () => { S.settings.apiKey = $('apiKey').value.trim(); save(); toast(S.settings.apiKey ? 'API key saved on this device' : 'API key removed'); });
   $('coachBtn').addEventListener('click', runCoach);
+  $('coachCopy').addEventListener('click', async () => {
+    const a = analyse();
+    if (a.n < 3) { $('coachOut').innerHTML = '<div class="empty">Log at least 3 days first.</div>'; return; }
+    const text = 'Act as a supportive, practical weight-loss coach. I live in South Africa. Below is a summary of my food log for the last 14 days (JSON). Based on my actual data, tell me what I should avoid or cut back on, why, and what to swap it for – name my foods and drinks, estimate the calories saved, and suggest realistic swaps available at local shops (Checkers, Pick n Pay, Woolworths, Spar) or easy home meals. Finish with 3–5 habits to focus on this week.\n\n' + JSON.stringify(coachSummary(a));
+    toast((await copyText(text)) ? 'Copied – paste it into the Claude app' : 'Could not copy – try again');
+  });
+  document.querySelectorAll('#photoModes button').forEach((b) => b.addEventListener('click', () => setPhotoMode(b.dataset.pmode)));
+  $('copyPhotoPrompt').addEventListener('click', async () => toast((await copyText(PHOTO_PROMPT)) ? 'Question copied – now open Claude' : 'Could not copy – try again'));
+  $('pasteClipboard').addEventListener('click', async () => {
+    try { const t = await navigator.clipboard.readText(); if (t) { $('claudePaste').value = t; $('readPaste').click(); } else toast('Clipboard is empty'); }
+    catch { toast('Tap the box and choose Paste instead'); $('claudePaste').focus(); }
+  });
+  $('readPaste').addEventListener('click', () => {
+    try { const d = parseClaudeReply($('claudePaste').value); aiItems = d.items; renderAiItems(d.notes); }
+    catch (err) { $('photoResult').innerHTML = `<div class="insight bad"><div class="ico">⚠️</div><div><p>${esc(err.message)}</p></div></div>`; }
+  });
   $('exportBtn').addEventListener('click', async () => {
     const data = { ...S, settings: { ...S.settings, apiKey: '' } };
     const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
