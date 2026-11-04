@@ -205,6 +205,8 @@
         <button class="btn sec" id="exportBtn">💾 Save backup</button>
         <button class="btn sec" id="importBtn">📂 Restore</button>
       </div>
+      <button class="btn sec" id="copyBackup" style="margin-top:8px">📋 Copy backup as text</button>
+      <p class="help" style="margin-top:8px">To restore a copied backup, paste it into the Claude reply box above and tap Apply.</p>
       <input type="file" id="importFile" accept="application/json,.json" style="display:none" />
       <button class="btn danger" id="resetBtn" style="margin-top:10px">Start over from the original list</button>
     </div>
@@ -410,9 +412,18 @@ function toggleGot(it) {
   save(); render();
 }
 
+// In-page yes/no question (browser confirm() is blocked in some app views).
+function ask(msg, yes = 'Yes') {
+  return new Promise((resolve) => {
+    openSheet(`<h2><span>Are you sure?</span><button class="x" id="askNo2">✕</button></h2><p class="help" style="font-size:14px;color:var(--text)">${esc(msg)}</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" id="askNo">Cancel</button><button class="btn" id="askYes">${esc(yes)}</button></div>`);
+    const done = (v) => { closeSheet(); resolve(v); };
+    $('askYes').onclick = () => done(true); $('askNo').onclick = () => done(false); $('askNo2').onclick = () => done(false);
+  });
+}
 function openSheet(html) { $('sheet').innerHTML = html; $('sheet').classList.add('on'); $('sheetBg').classList.add('on'); }
 function closeSheet() { $('sheet').classList.remove('on'); $('sheetBg').classList.remove('on'); }
-$('sheetBg').onclick = closeSheet;
+$('sheetBg').onclick = () => { const n = $('askNo'); if (n) n.click(); else closeSheet(); };
 
 function itemOptions(it) {
   const need = needFor(it), g = S.week.got[it.id];
@@ -463,8 +474,8 @@ function editItem(it) {
     if (isNew) S.items.push({ id: 'i' + S.nextId++, base: data.qty, ...data }); else Object.assign(it, data);
     save(); closeSheet(); render(); toast(isNew ? 'Added' : 'Saved');
   };
-  if ($('eDel')) $('eDel').onclick = () => {
-    if (!confirm(`Delete ${it.name}?`)) return;
+  if ($('eDel')) $('eDel').onclick = async () => {
+    if (!(await ask(`Delete ${it.name}?`, 'Delete'))) return;
     S.items = S.items.filter((x) => x !== it); save(); closeSheet(); render();
   };
 }
@@ -528,16 +539,16 @@ $('addItem').onclick = () => editItem(null);
 $('weekStart').onchange = (e) => { if (e.target.value) { S.week.start = e.target.value; save(); render(); } };
 
 // ---------- finish week ----------
-$('finishWeek').onclick = () => {
+$('finishWeek').onclick = async () => {
   const weekly = S.items.filter((it) => it.kind === 'weekly');
   const anyGot = Object.keys(S.week.got).length > 0;
   if (!anyGot) {
-    if (!confirm('Nothing was ticked as bought this week. Count everything on the list as bought?')) return;
+    if (!(await ask('Nothing was ticked as bought this week. Count everything on the list as bought?', 'Count as bought'))) return;
     S.items.filter(onList).forEach((it) => { S.week.got[it.id] = it.kind === 'restock' ? 1 : needFor(it); });
   }
   const counted = weekly.filter((it) => available(it) > 0);
   const missing = counted.filter((it) => !S.take[it.id]).length;
-  if (missing && !confirm(`${missing} item${missing > 1 ? 's were' : ' was'} not counted. Treat ${missing > 1 ? 'them' : 'it'} as fully used?`)) return;
+  if (missing && !(await ask(`${missing} item${missing > 1 ? 's were' : ' was'} not counted. Treat ${missing > 1 ? 'them' : 'it'} as fully used?`, 'Yes, finish week'))) return;
 
   const { prev, ...snap } = S;
   S.prev = JSON.parse(JSON.stringify(snap));
@@ -566,8 +577,8 @@ $('finishWeek').onclick = () => {
   document.querySelector('nav.bottom button[data-v="list"]').click();
   toast(S.auto && changes.length ? `New list ready · ${changes.length} amount${changes.length > 1 ? 's' : ''} adjusted` : (!S.auto && changes.length ? `New list ready · ${changes.length} suggestion${changes.length > 1 ? 's' : ''} under Amounts` : 'New list ready'));
 };
-$('undoWeek').onclick = () => {
-  if (!S.prev || !confirm('Go back to before you last tapped "Finish week"?')) return;
+$('undoWeek').onclick = async () => {
+  if (!S.prev || !(await ask('Go back to before your last "Finish week" or applied Claude reply?', 'Undo'))) return;
   S = { ...S.prev, prev: null }; save(); render(); toast('Undone');
 };
 
@@ -635,6 +646,7 @@ function extractJSON(text) {
 }
 $('applyClaude').onclick = () => {
   const d = extractJSON($('claudePaste').value || '');
+  if (d && Array.isArray(d.items) && d.week) { restoreBackup(d).then(() => { $('claudePaste').value = ''; }); return; }
   if (!d || typeof d !== 'object') { $('applyResult').innerHTML = '<p class="help" style="color:#fda4af;margin-top:8px">Couldn\'t find the changes block. Copy Claude\'s whole reply, including the part in { }.</p>'; return; }
   const { prev, ...snap } = S; const before = JSON.parse(JSON.stringify(snap));
   const done = [], missed = [];
@@ -666,14 +678,19 @@ $('exportBtn').onclick = async () => {
   if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'PocketPantry backup' }); return; } catch (e) { if (e.name === 'AbortError') return; } }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 };
+async function restoreBackup(d) {
+  if (!(await ask('Replace everything on this phone with this backup?', 'Restore'))) return;
+  S = { ...freshState(), ...d, prev: null }; save(); render(); toast('Backup restored');
+}
+$('copyBackup').onclick = async () => { const { prev, ...data } = S; toast((await copyText(JSON.stringify(data))) ? 'Backup copied — paste it into notes or email to keep it' : 'Could not copy'); };
 $('importBtn').onclick = () => $('importFile').click();
 $('importFile').onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
-  try { const d = JSON.parse(await f.text()); if (!d.items) throw 0; if (!confirm('Replace everything on this phone with this backup?')) return; S = { ...freshState(), ...d, prev: null }; save(); render(); toast('Backup restored'); }
+  try { const d = JSON.parse(await f.text()); if (!d.items) throw 0; restoreBackup(d); }
   catch { toast('That file is not a PocketPantry backup'); }
   e.target.value = '';
 };
-$('resetBtn').onclick = () => { if (confirm('Start over? This clears your history, leftovers and changes.')) { S = freshState(); save(); render(); toast('Back to the original list'); } };
+$('resetBtn').onclick = async () => { if (await ask('Start over? This clears your history, leftovers and changes.', 'Start over')) { S = freshState(); save(); render(); toast('Back to the original list'); } };
 
 let tt;
 function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2600); }
