@@ -375,6 +375,29 @@
   <div class="chips" id="ptMeal"></div>
   <div class="grid-3" style="margin-top:12px" id="ptNutr"></div>
   <div id="ptTags" style="margin-top:10px"></div>
+  <div id="ptMissing" class="tiny warn" style="margin-top:8px"></div>
+  <button class="btn sec sm" id="ptEditBtn" style="margin-top:10px">✏️ Fix values from the packet</button>
+  <div id="ptEdit" style="display:none;margin-top:10px" class="ai-item">
+    <div class="small" style="font-weight:700;margin-bottom:4px">Values from the nutrition label</div>
+    <div class="tiny muted">SA labels show "per 100g" and "per serving" columns – enter either one.</div>
+    <div class="chips" style="margin:8px 0" id="edBasis">
+      <button class="chip on" data-basis="serving">Per serving</button>
+      <button class="chip" data-basis="100">Per 100 g / 100 ml</button>
+    </div>
+    <div class="grid-2">
+      <div><label class="f">Serving</label><input id="edServ" placeholder="e.g. 3 crackers" /></div>
+      <div><label class="f">Serving size g/ml</label><input id="edGrams" type="number" inputmode="decimal" /></div>
+      <div><label class="f">Energy kcal</label><input id="edKcal" type="number" inputmode="decimal" /></div>
+      <div><label class="f">or energy kJ</label><input id="edKj" type="number" inputmode="decimal" placeholder="kJ ÷ 4.184" /></div>
+      <div><label class="f">Protein g</label><input id="edP" type="number" inputmode="decimal" /></div>
+      <div><label class="f">Carbs g</label><input id="edC" type="number" inputmode="decimal" /></div>
+      <div><label class="f">of which sugar g</label><input id="edS" type="number" inputmode="decimal" /></div>
+      <div><label class="f">Fat g</label><input id="edF" type="number" inputmode="decimal" /></div>
+      <div><label class="f">Fibre g</label><input id="edFi" type="number" inputmode="decimal" /></div>
+    </div>
+    <label class="row small" style="margin-top:10px;gap:8px"><input type="checkbox" id="edPast" style="width:20px;height:20px;flex:none" checked /> <span>Also correct earlier entries of this food</span></label>
+    <button class="btn" style="margin-top:10px" id="edSave">Save values</button>
+  </div>
   <div class="row" style="margin-top:14px">
     <button class="btn danger" id="ptDelete" style="display:none">Delete</button>
     <button class="btn" id="ptSave">Add to log</button>
@@ -450,7 +473,15 @@
   const BUILTIN = window.FOODS_ZA.map(([name, kw, serving, grams, kcal, p, c, f, s, tags, fi]) => ({
     name, kw, serving, grams, kcal, p, c, f, s, fi: fi || 0, tags: tags ? tags.split(' ') : [], src: 'za',
   }));
-  const allFoods = () => [...S.custom, ...BUILTIN];
+  const allFoods = () => { const mine = new Set(S.custom.map((f) => f.name)); return [...S.custom, ...BUILTIN.filter((f) => !mine.has(f.name))]; };
+  // Values a food is missing (unknown rather than truly 0), e.g. an online listing without sugar or fibre.
+  function missingKeys(food) {
+    const m = new Set(food.missing || []);
+    if (food.s == null) m.add('s');
+    if (food.fi == null) m.add('fi');
+    return [...m];
+  }
+  const KEY_LABEL = { kcal: 'calories', p: 'protein', c: 'carbs', f: 'fat', s: 'sugar', fi: 'fibre' };
   function searchLocal(q) {
     q = q.trim().toLowerCase();
     if (!q) {
@@ -539,7 +570,7 @@
   function addEntry(food, qty, meal, day) {
     const e = Object.assign({
       id: uid(), name: food.name, brand: food.brand || '', serving: food.serving, grams: food.grams || 0, qty, meal, tags: food.tags || [], src: food.src,
-      time: new Date().toTimeString().slice(0, 5), base: { kcal: food.kcal, p: food.p, c: food.c, f: food.f, s: food.s || 0, fi: food.fi || 0 },
+      time: new Date().toTimeString().slice(0, 5), base: { kcal: food.kcal, p: food.p, c: food.c, f: food.f, s: food.s ?? null, fi: food.fi ?? null }, missing: missingKeys(food),
     }, scaled(food, qty));
     (S.log[day] = S.log[day] || []).push(e);
     S.recent = [food.name, ...S.recent.filter((n) => n !== food.name)].slice(0, 25);
@@ -972,7 +1003,7 @@ For "tags" use any that apply from: ${Object.keys(TAG_INFO).join(', ')}. Put any
     const k = grams / 100;
     const cats = (p.categories_tags || []).join(' ');
     const tags = [];
-    const sugar100 = n.sugars_100g || 0;
+    const sugar100 = n.sugars_100g ?? null;
     const isDrink = /beverage|drink|juice|soda|water|beer|wine/.test(cats);
     if (/alcoholic|beer|wine|cider|spirits|liqueur/.test(cats) && !/non-alcoholic/.test(cats)) tags.push('alcohol');
     if (isDrink) tags.push('drink');
@@ -985,7 +1016,7 @@ For "tags" use any that apply from: ${Object.keys(TAG_INFO).join(', ')}. Put any
     return {
       name: brand && !name.toLowerCase().includes(brand.toLowerCase()) ? `${brand} ${name}` : name, brand,
       serving: p.serving_size || '100g', grams, kcal: r0(kcal100 * k), p: r1((n.proteins_100g || 0) * k), c: r1((n.carbohydrates_100g || 0) * k),
-      f: r1((n.fat_100g || 0) * k), s: r1(sugar100 * k), fi: r1((n.fiber_100g || 0) * k), tags: [...new Set(tags)], src: 'off', code: p.code,
+      f: r1((n.fat_100g || 0) * k), s: sugar100 == null ? null : r1(sugar100 * k), fi: n.fiber_100g == null ? null : r1(n.fiber_100g * k), tags: [...new Set(tags)], src: 'off', code: p.code,
     };
   }
   async function offSearch(q) {
@@ -1099,7 +1130,7 @@ For "tags" use any that apply from: ${Object.keys(TAG_INFO).join(', ')}. Put any
   function renderSearch(list, isDefault, online) {
     searchList = list;
     const head = isDefault ? `<div class="tiny muted" style="margin-bottom:6px">${S.recent.length ? 'Recent' : 'Popular SA foods'}</div>` : online ? '<div class="tiny muted" style="margin-bottom:6px">Open Food Facts · South Africa</div>' : '';
-    $('searchResults').innerHTML = head + (list.length ? list.map((f, i) => `<div class="result" data-res="${i}"><div><div class="n">${esc(f.name)}</div><div class="d">${esc(f.serving)}${f.grams ? ` (${r0(f.grams)}g)` : ''} · P${r0(f.p)} C${r0(f.c)} F${r0(f.f)} ${f.src === 'custom' ? '<span class="badge">Mine</span>' : ''}${tagBadges(f.tags, true)}</div></div><div class="k" style="font-weight:800">${r0(f.kcal)}</div></div>`).join('')
+    $('searchResults').innerHTML = head + (list.length ? list.map((f, i) => `<div class="result" data-res="${i}"><div><div class="n">${esc(f.name)}</div><div class="d">${esc(f.serving)}${f.grams ? ` (${r0(f.grams)}g)` : ''} · P${r0(f.p)} C${r0(f.c)} F${r0(f.f)} ${f.src === 'custom' ? '<span class="badge">Mine</span>' : ''}${missingKeys(f).length ? `<span class="badge amber">no ${missingKeys(f).map((k) => KEY_LABEL[k]).join('/')}</span>` : ''}${tagBadges(f.tags, true)}</div></div><div class="k" style="font-weight:800">${r0(f.kcal)}</div></div>`).join('')
       : `<div class="empty">No match in the built-in list.<br>Tap <b>Search SA products online</b>, scan the barcode, or use Quick add.</div>`);
   }
   // portion sheet
@@ -1116,14 +1147,17 @@ For "tags" use any that apply from: ${Object.keys(TAG_INFO).join(', ')}. Put any
     $('ptDelete').style.display = entry ? '' : 'none';
     $('ptSave').textContent = entry ? 'Save changes' : 'Add to log';
     $('ptTags').innerHTML = tagBadges(food.tags);
+    $('ptEdit').style.display = 'none'; $('ptEditBtn').style.display = '';
     renderPortion();
     openSheet('portionSheet');
   }
   function renderPortion() {
     const q = num($('ptQty').value);
     const n = scaled(ptFood, q);
-    $('ptNutr').innerHTML = [['kcal', n.kcal, ''], ['Protein', n.p, 'g'], ['Carbs', n.c, 'g'], ['Fat', n.f, 'g'], ['Sugar', n.s, 'g'], ['Fibre', n.fi, 'g']]
-      .map(([l, v, u]) => `<div class="tile"><div class="l">${l}</div><div class="v" style="font-size:16px">${l === 'kcal' ? r0(v) : r1(v)}${u}</div></div>`).join('');
+    const miss = missingKeys(ptFood);
+    $('ptNutr').innerHTML = [['kcal', n.kcal, '', 'kcal'], ['Protein', n.p, 'g', 'p'], ['Carbs', n.c, 'g', 'c'], ['Fat', n.f, 'g', 'f'], ['Sugar', n.s, 'g', 's'], ['Fibre', n.fi, 'g', 'fi']]
+      .map(([l, v, u, k]) => `<div class="tile"><div class="l">${l}</div><div class="v ${miss.includes(k) ? 'warn' : ''}" style="font-size:16px">${miss.includes(k) ? '?' : (l === 'kcal' ? r0(v) : r1(v)) + u}</div></div>`).join('');
+    $('ptMissing').innerHTML = miss.length ? `⚠️ No ${miss.map((k) => KEY_LABEL[k]).join(' or ')} value for this product – it counts as 0 g. Tap <b>Fix values from the packet</b> to enter it from the label.` : '';
     $('ptMeal').innerHTML = MEALS.map((m) => `<button class="chip ${m.id === ptMealSel ? 'on' : ''}" data-ptmeal="${m.id}">${m.ic} ${m.label}</button>`).join('');
   }
   let quickTags = [];
@@ -1276,12 +1310,65 @@ For "tags" use any that apply from: ${Object.keys(TAG_INFO).join(', ')}. Put any
     const q = num($('ptQty').value);
     if (q <= 0) return toast('Enter an amount');
     if (ptEntry) {
-      Object.assign(ptEntry, { qty: q, meal: ptMealSel }, scaled(ptFood, q)); save(); toast('Updated');
+      Object.assign(ptEntry, { qty: q, meal: ptMealSel, serving: ptFood.serving, grams: ptFood.grams || 0, missing: missingKeys(ptFood),
+        base: { kcal: ptFood.kcal, p: ptFood.p, c: ptFood.c, f: ptFood.f, s: ptFood.s ?? null, fi: ptFood.fi ?? null } }, scaled(ptFood, q)); save(); toast('Updated');
     } else {
       if (ptFood.src === 'off' && !S.custom.some((f) => f.name === ptFood.name)) S.custom.unshift({ ...ptFood, src: 'custom' });
       addEntry(ptFood, q, ptMealSel, curDay); toast(`Added ${r0(ptFood.kcal * q)} kcal`);
     }
     closeSheet();
+  });
+  let edBasis = 'serving';
+  function setBasis(b) { edBasis = b; document.querySelectorAll('#edBasis .chip').forEach((c) => c.classList.toggle('on', c.dataset.basis === b)); }
+  $('edBasis').addEventListener('click', (e) => { const c = e.target.closest('[data-basis]'); if (c) setBasis(c.dataset.basis); });
+  $('ptEditBtn').addEventListener('click', () => {
+    const f = ptFood;
+    setBasis('serving');
+    $('edServ').value = f.serving || ''; $('edGrams').value = f.grams || '';
+    $('edKcal').value = f.kcal ?? ''; $('edKj').value = '';
+    $('edP').value = f.p ?? ''; $('edC').value = f.c ?? ''; $('edF').value = f.f ?? '';
+    $('edS').value = f.s ?? ''; $('edFi').value = f.fi ?? '';
+    $('ptEdit').style.display = ''; $('ptEditBtn').style.display = 'none';
+    $('ptEdit').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  $('edKj').addEventListener('input', () => { const kj = num($('edKj').value); if (kj) $('edKcal').value = r0(kj / 4.184); });
+  $('edSave').addEventListener('click', () => {
+    const grams = num($('edGrams').value);
+    if (edBasis === '100' && !grams) return toast('Enter the serving size in g/ml so per-100g values can be converted');
+    const k = edBasis === '100' ? grams / 100 : 1;
+    const val = (id) => ($(id).value.trim() === '' ? null : num($(id).value) * k);
+    const kcal = val('edKcal');
+    if (!kcal) return toast('Enter the energy (kcal or kJ)');
+    const name = ptFood.name;
+    const food = {
+      ...ptFood, name, serving: $('edServ').value.trim() || ptFood.serving || '1 serving', grams,
+      kcal: r0(kcal), p: r1(val('edP') || 0), c: r1(val('edC') || 0), f: r1(val('edF') || 0),
+      s: val('edS') == null ? null : r1(val('edS')), fi: val('edFi') == null ? null : r1(val('edFi')),
+      missing: [], src: 'custom',
+    };
+    delete food.id; delete food.qty; delete food.meal; delete food.time; delete food.base;
+    // Keep the amount eaten the same when the serving size changes (e.g. 100 g -> 3 crackers of 20 g).
+    const reQty = (qty, oldGrams) => (oldGrams > 0 && grams > 0 ? Math.round(((qty * oldGrams) / grams) * 100) / 100 : qty);
+    const oldGrams = ptFood.grams || 0;
+    S.custom = [food, ...S.custom.filter((f) => f.name !== name)];
+    let fixed = 0;
+    if ($('edPast').checked) {
+      Object.values(S.log).forEach((entries) => entries.forEach((e) => {
+        if (e.name !== name) return;
+        const qty = reQty(e.qty, e.grams || 0);
+        Object.assign(e, { qty, serving: food.serving, grams: food.grams, missing: missingKeys(food), base: { kcal: food.kcal, p: food.p, c: food.c, f: food.f, s: food.s, fi: food.fi } }, scaled(food, qty));
+        fixed++;
+      }));
+    }
+    save();
+    ptFood = food;
+    $('ptQty').value = reQty(num($('ptQty').value), oldGrams);
+    $('ptServing').textContent = `1 serving = ${food.serving}${food.grams ? ` (${r0(food.grams)}g/ml)` : ''} · ${r0(food.kcal)} kcal`;
+    $('ptGrams').disabled = !food.grams;
+    if (food.grams) $('ptGrams').value = r0(food.grams * num($('ptQty').value));
+    $('ptEdit').style.display = 'none'; $('ptEditBtn').style.display = '';
+    renderPortion();
+    toast(fixed ? `Saved – ${fixed} earlier entr${fixed === 1 ? 'y' : 'ies'} corrected` : 'Saved to My foods');
   });
   $('ptDelete').addEventListener('click', () => { if (!ptEntry) return; S.log[curDay] = dayEntries(curDay).filter((e) => e.id !== ptEntry.id); save(); toast('Deleted'); closeSheet(); });
 
